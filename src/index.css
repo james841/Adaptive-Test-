@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-paper text-ink font-body antialiased;
+    background-image: radial-gradient(circle at 1px 1px, rgba(0,0,0,0.04) 1px, transparent 0);
+    background-size: 24px 24px;
+  }
+}
+
+@layer components {
+  /* ─── Buttons ──────────────────────────────────────── */
+  .btn-primary {
+    @apply bg-ink text-chalk font-body font-medium px-6 py-3 
+           transition-all duration-200 hover:bg-ash active:scale-[0.98]
+           disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply border border-ink text-ink font-body font-medium px-6 py-3 
+           transition-all duration-200 hover:bg-ink hover:text-chalk active:scale-[0.98];
+  }
+
+  .btn-danger {
+    @apply bg-red-600 text-chalk font-body font-medium px-6 py-3 
+           transition-all duration-200 hover:bg-red-700 active:scale-[0.98];
+  }
+
+  /* ─── Cards ────────────────────────────────────────── */
+  .card {
+    @apply bg-chalk border border-mist p-6;
+  }
+
+  .card-dark {
+    @apply bg-ink text-chalk border border-ash p-6;
+  }
+
+  /* ─── Form inputs ───────────────────────────────────── */
+  .input-field {
+    @apply w-full border border-mist bg-chalk px-4 py-3 font-body text-ink
+           placeholder:text-steel/50 focus:outline-none focus:border-ink
+           transition-colors duration-200;
+  }
+
+  .input-label {
+    @apply block text-xs font-medium uppercase tracking-widest text-steel mb-2;
+  }
+
+  /* ─── Option buttons for test ───────────────────────── */
+  .option-btn {
+    @apply w-full text-left px-5 py-4 border border-mist bg-chalk font-body
+           transition-all duration-150 hover:border-ink hover:bg-mist
+           active:scale-[0.99] cursor-pointer;
+  }
+
+  .option-btn.selected {
+    @apply border-ink bg-ink text-chalk;
+  }
+
+  .option-btn.correct {
+    @apply border-green-600 bg-green-50 text-green-900;
+  }
+
+  .option-btn.incorrect {
+    @apply border-red-500 bg-red-50 text-red-900;
+  }
+
+  /* ─── Nav ───────────────────────────────────────────── */
+  .nav-link {
+    @apply text-sm font-medium text-steel hover:text-ink transition-colors duration-150;
+  }
+
+  .nav-link.active {
+    @apply text-ink border-b-2 border-ink pb-0.5;
+  }
+
+  /* ─── Badge ─────────────────────────────────────────── */
+  .badge {
+    @apply inline-block px-2 py-0.5 text-xs font-mono uppercase tracking-wider;
+  }
+
+  .badge-easy     { @apply bg-green-100 text-green-800; }
+  .badge-moderate { @apply bg-yellow-100 text-yellow-800; }
+  .badge-difficult{ @apply bg-red-100 text-red-800; }
+  .badge-low      { @apply bg-red-100 text-red-700; }
+  .badge-average  { @apply bg-yellow-100 text-yellow-700; }
+  .badge-high     { @apply bg-green-100 text-green-700; }
+
+  /* ─── Table ─────────────────────────────────────────── */
+  .data-table {
+    @apply w-full text-sm font-body border-collapse;
+  }
+
+  .data-table th {
+    @apply text-left text-xs uppercase tracking-widest text-steel 
+           border-b border-mist py-3 px-4 font-medium bg-paper;
+  }
+
+  .data-table td {
+    @apply py-3 px-4 border-b border-mist/60 text-ink;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-mist/30;
+  }
+
+  /* ─── Progress bar ──────────────────────────────────── */
+  .progress-track {
+    @apply h-1 bg-mist w-full overflow-hidden;
+  }
+
+  .progress-fill {
+    @apply h-full bg-ink transition-all duration-500 ease-out;
+  }
+
+  /* ─── Section header ────────────────────────────────── */
+  .section-label {
+    @apply text-xs uppercase tracking-[0.2em] text-steel font-medium;
+  }
+}
+
+@layer utilities {
+  .animate-delay-100 { animation-delay: 100ms; }
+  .animate-delay-200 { animation-delay: 200ms; }
+  .animate-delay-300 { animation-delay: 300ms; }
+  .animate-delay-400 { animation-delay: 400ms; }
+  .animate-delay-500 { animation-delay: 500ms; }
+
+  .text-balance { text-wrap: balance; }
+}
