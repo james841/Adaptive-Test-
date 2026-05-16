@@ -3,7 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom'
 import { StudentNav } from '@/components/StudentNav'
 import { PageShell, PageLoader, Spinner } from '@/components/ui'
 import { useStudentAuth } from '@/context/StudentAuthContext'
-import { Timer, Brain, Target, Info, CheckCircle2, AlertCircle, ArrowRight, Loader2 } from 'lucide-react'
+import { Info, ArrowRight, Loader2 } from 'lucide-react'
 import {
   CAT_CONFIG,
   selectNextItem,
@@ -33,11 +33,7 @@ export default function TestPage() {
   const [selected, setSelected] = useState<AnswerOption | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState(false)
-  const [revealed, setRevealed] = useState(false)
-  const [showFailureModal, setShowFailureModal] = useState(false)
-  const [failureResponses, setFailureResponses] = useState<CATResponse[] | null>(null)
-  const [failureTheta, setFailureTheta] = useState(0)
-  const [failureSem, setFailureSem] = useState(0)
+  // removed consecutive-failure modal state
 
   const itemStartRef = useRef<number>(Date.now())
   const testStartRef = useRef<number>(Date.now())
@@ -83,7 +79,6 @@ export default function TestPage() {
   const handleSubmit = async () => {
     if (!selected || !currentItem || !sessionId || submitting) return
     setSubmitting(true)
-    setRevealed(true)
 
     const isCorrect = selected === currentItem.correct_answer
     const responseTimeMs = Date.now() - itemStartRef.current
@@ -117,20 +112,13 @@ export default function TestPage() {
     await new Promise(r => setTimeout(r, 900))
 
     const nextItem = selectNextItem(newTheta, items, newAnswered)
-    const stop = checkStoppingRule(updatedResponses.length, newSem, nextItem, updatedResponses)
+    const stop = checkStoppingRule(updatedResponses.length, newSem, nextItem)
 
-    if (stop === 'consecutive_failures') {
-      setFailureResponses(updatedResponses)
-      setFailureTheta(newTheta)
-      setFailureSem(newSem)
-      setShowFailureModal(true)
-      setSubmitting(false)
-    } else if (stop) {
+    if (stop) {
       await finishTest(updatedResponses, newTheta, newSem)
     } else {
       setCurrentItem(nextItem)
       setSelected(null)
-      setRevealed(false)
       itemStartRef.current = Date.now()
       setSubmitting(false)
     }
@@ -201,33 +189,22 @@ export default function TestPage() {
           <div className="p-6 md:p-8 grid grid-cols-1 gap-3">
             {(Object.keys(optionMap) as AnswerOption[]).map(key => {
               const isSelected = selected === key
-              const isCorrect = key === currentItem.correct_answer
-              
-              let variantCls = "border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30"
-              if (revealed) {
-                if (isCorrect) variantCls = "border-emerald-500 bg-emerald-50 text-emerald-900"
-                else if (isSelected) variantCls = "border-red-500 bg-red-50 text-red-900"
-                else variantCls = "border-slate-100 opacity-40"
-              } else if (isSelected) {
-                variantCls = "border-blue-600 bg-blue-50 ring-2 ring-blue-600/10"
-              }
+
+              const variantCls = isSelected
+                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600/10'
+                : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
 
               return (
                 <button
                   key={key}
-                  disabled={revealed}
+                  disabled={submitting}
                   onClick={() => setSelected(key)}
                   className={`group flex items-center p-4 rounded-2xl border-2 transition-all duration-200 text-left ${variantCls}`}
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-sm font-bold mr-4 transition-colors
-                    ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}
-                    ${revealed && isCorrect ? 'bg-emerald-600 text-white' : ''}
-                    ${revealed && isSelected && !isCorrect ? 'bg-red-600 text-white' : ''}
-                  `}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-sm font-bold mr-4 transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
                     {key}
                   </div>
                   <span className="flex-1 font-semibold">{optionMap[key]}</span>
-                  {revealed && isCorrect && <CheckCircle2 className="w-5 h-5 text-emerald-600 ml-2" />}
                 </button>
               )
             })}
@@ -255,59 +232,7 @@ export default function TestPage() {
         </div>
       </main>
 
-      {/* Failure Modal */}
-      {showFailureModal && failureResponses && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center px-4 z-50">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full overflow-hidden animate-fade-up">
-            <div className="p-1 bg-amber-500" />
-            <div className="p-8">
-              <div className="w-16 h-16 bg-amber-50 rounded-2xl flex items-center justify-center mb-6">
-                <Brain className="w-8 h-8 text-amber-600" />
-              </div>
-              <h2 className="text-2xl font-display font-bold text-slate-900 mb-2">Feeling Challenged?</h2>
-              <p className="text-slate-600 text-sm leading-relaxed mb-6">
-                That’s perfectly normal! Adaptive tests are designed to find your limits. 
-                We’ve noticed these questions are a bit tough—would you like to continue and let the system adjust to easier questions, or wrap things up now?
-              </p>
-              
-              <div className="grid grid-cols-2 gap-4 mb-8">
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Solved</p>
-                  <p className="text-xl font-bold text-slate-900">{failureResponses.length}</p>
-                </div>
-                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase mb-1">Accuracy</p>
-                  <p className="text-xl font-bold text-slate-900">
-                    {Math.round((failureResponses.filter(r => r.isCorrect).length / failureResponses.length) * 100)}%
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex flex-col gap-3">
-                <button
-                  className="w-full bg-slate-900 text-white py-4 rounded-2xl font-bold transition-all hover:bg-blue-600"
-                  onClick={() => {
-                    setShowFailureModal(false)
-                    setFailureResponses(null)
-                  }}
-                >
-                  Continue Testing
-                </button>
-                <button
-                  className="w-full text-slate-500 py-3 rounded-2xl font-semibold hover:bg-slate-50 transition-colors"
-                  onClick={async () => {
-                    if (failureResponses) {
-                      await finishTest(failureResponses, failureTheta, failureSem)
-                    }
-                  }}
-                >
-                  End and See Results
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      
     </PageShell>
   )
 }

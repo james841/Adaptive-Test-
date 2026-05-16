@@ -31,19 +31,22 @@ export default function ResultPage() {
   const level = classifyAbility(finalTheta)
   const accuracy = Math.round((totalCorrect / totalItems) * 100)
 
-  const levelMessages = {
+  const levelMessages: Record<string, { title: string; msg: string; color: string; bg: string }> = {
     High: {
-      msg: 'Excellent performance! You demonstrated strong mastery of the material.',
+      title: 'Great Job!',
+      msg: 'Keep practising. With effort, you will improve your mathematics skills.',
       color: 'text-emerald-600',
       bg: 'bg-emerald-50'
     },
     Average: {
-      msg: 'Good effort. You have a solid foundation with room to grow.',
+      title: 'Nice Work!',
+      msg: "You're making steady progress — keep practising to strengthen your skills.",
       color: 'text-blue-600',
       bg: 'bg-blue-50'
     },
     Low: {
-      msg: 'Keep practising. With effort, you will improve your mathematics skills.',
+      title: 'Keep Trying!',
+      msg: "Don't be discouraged. Focused practice will help you improve your understanding.",
       color: 'text-amber-600',
       bg: 'bg-amber-50'
     },
@@ -60,7 +63,7 @@ export default function ResultPage() {
             <CheckCircle2 className="w-3 h-3" />
             Assessment Finalized
           </div>
-          <h1 className="text-4xl md:text-5xl font-display font-bold text-slate-900 mb-4">Great Job!</h1>
+          <h1 className="text-4xl md:text-5xl font-display font-bold text-slate-900 mb-4">{levelMessages[level].title}</h1>
           <div className={`inline-block px-6 py-3 rounded-2xl ${levelMessages[level].bg} ${levelMessages[level].color} max-w-lg`}>
             <p className="text-sm font-medium leading-relaxed">{levelMessages[level].msg}</p>
           </div>

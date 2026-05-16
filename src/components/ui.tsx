@@ -78,15 +78,22 @@ export function StatCard({
   value,
   sub,
   dark = false,
+  icon,
+  className = '',
 }: {
   label: string
   value: string | number
   sub?: string
   dark?: boolean
+  icon?: React.ReactNode
+  className?: string
 }) {
   return (
-    <div className={dark ? 'card-dark' : 'card'}>
-      <p className={`section-label mb-2 ${dark ? 'text-chalk/50' : ''}`}>{label}</p>
+    <div className={`${dark ? 'card-dark' : 'card'} ${className}`.trim()}>
+      <div className="flex items-center justify-between mb-1">
+        <p className={`section-label ${dark ? 'text-chalk/50' : ''}`}>{label}</p>
+        {icon && <div className="text-steel ml-2">{icon}</div>}
+      </div>
       <p className={`font-display text-3xl tracking-wide ${dark ? 'text-chalk' : 'text-ink'}`}>
         {value}
       </p>

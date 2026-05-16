@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { StudentNav } from '@/components/StudentNav'
 import { PageShell, ErrorMsg } from '@/components/ui'
@@ -7,8 +7,14 @@ import { loginStudent } from '@/lib/api'
 import { User, Lock, Loader2, ArrowRight } from 'lucide-react'
 
 export default function LoginPage() {
-  const { setStudent } = useStudentAuth()
+  const { student, isLoading, setStudent } = useStudentAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!isLoading && student) {
+      navigate('/instructions', { replace: true })
+    }
+  }, [student, isLoading, navigate])
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')

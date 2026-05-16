@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { StudentNav } from '@/components/StudentNav'
 import { PageShell, ErrorMsg } from '@/components/ui'
@@ -7,8 +7,14 @@ import { registerStudent } from '@/lib/api'
 import { User, School, GraduationCap, Lock, ArrowRight, Loader2, Users } from 'lucide-react'
 
 export default function RegisterPage() {
-  const { setStudent } = useStudentAuth()
+  const { student, isLoading, setStudent } = useStudentAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    if (!isLoading && student) {
+      navigate('/instructions', { replace: true })
+    }
+  }, [student, isLoading, navigate])
 
   const [form, setForm] = useState({
     full_name: '', gender: '' as 'Male' | 'Female' | '',

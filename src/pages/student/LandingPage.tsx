@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom'
 import { StudentNav } from '@/components/StudentNav'
 import { PageShell } from '@/components/ui'
+import { useStudentAuth } from '@/context/StudentAuthContext'
 import { ArrowRight, BookOpen, BrainCircuit, Zap, GraduationCap } from 'lucide-react'
 
 export default function LandingPage() {
+  const { student } = useStudentAuth()
+  const primaryLink = student ? '/instructions' : '/register'
+
   return (
     <PageShell>
       <StudentNav />
@@ -36,8 +40,8 @@ export default function LandingPage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/register" className="group flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-xl font-bold transition-all hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-200">
-                Start My Assessment
+              <Link to={primaryLink} className="group flex items-center justify-center gap-2 bg-slate-900 text-white px-8 py-4 rounded-xl font-bold transition-all hover:bg-blue-600 hover:shadow-lg hover:shadow-blue-200">
+                {student ? 'Continue Assessment' : 'Start My Assessment'}
                 <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
               </Link>
               <Link to="/login" className="flex items-center justify-center px-8 py-4 rounded-xl font-bold text-slate-600 border border-slate-200 hover:bg-slate-50 transition-colors">

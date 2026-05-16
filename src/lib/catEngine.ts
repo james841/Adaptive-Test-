@@ -3,53 +3,72 @@
  *
  * Algorithm:
  *  1. Start θ = 0.00 logits
- *  2. Select item closest to current θ (not yet administered)
- *  3. After response: update θ via weighted MLE approximation
- *  4. Compute SEM = 1 / √(Σ Fisher Information)
- *  5. Stop if: items ≥ MAX_ITEMS  OR  SEM ≤ SEM_THRESHOLD
+ *  2. Select item with b-value closest to current θ (Maximum Fisher Information)
+ *  3. After response: update θ via Newton-Raphson MLE approximation
+ *  4. Apply MLEF fence (-3.5, 3.5) then hard bounds (-4.0, 4.0)
+ *  5. Compute SEM = 1 / √(Σ Fisher Information)
+ *  6. Stop if: items ≥ MAX_ITEMS  OR  (items ≥ MIN_ITEMS AND SEM ≤ SEM_THRESHOLD)
+ *
+ * Settings match AllTestSim configuration:
+ *  - MODE: CAT
+ *  - ISC: MFI (Maximum Fisher Information)
+ *  - SE: MLEF with FENCE -3.5, 3.5
+ *  - SE: BND -4.0, 4.0
+ *  - TL: Variable MIN 10, MAX 30, SEE 0.30
+ *  - INITIAL THETA: Fixed 0.0
  */
 
 import type { Item, CATResponse } from '@/types'
 
-// ─── Configuration ──────────────────────────────────────────────────────────
+// ─── Configuration ─────────────────────────────────────────────────────────────
+// Matches AllTestSim syntax preview settings exactly
 export const CAT_CONFIG = {
-  INITIAL_THETA:           0.00,   // starting ability estimate (logits)
-  MAX_ITEMS:               10,     // maximum items before forced stop
-  SEM_THRESHOLD:           0.30,   // stop when SEM ≤ this value
-  MAX_CONSECUTIVE_FAILURES: 3,     // stop if N consecutive wrong answers
-  THETA_MIN:              -4.0,   // clamp: lowest possible ability
-  THETA_MAX:               4.0,    // clamp: highest possible ability
+  INITIAL_THETA:  0.00,   // SE> FIX, 0.0 — starting ability estimate (logits)
+  MAX_ITEMS:      30,     // TL> FIX, 30  — maximum items before forced stop
+  MIN_ITEMS:      10,     // Variable min — don't stop before 10 items
+  SEM_THRESHOLD:  0.30,   // SEE 0.30     — stop when SEM ≤ this value
+  THETA_MIN:      -4.0,   // SE> BND -4   — hard lower bound
+  THETA_MAX:       4.0,   // SE> BND  4   — hard upper bound
+  FENCE_LOW:      -3.5,   // SE> FENCE -3.5 — MLEF soft lower fence
+  FENCE_HIGH:      3.5,   // SE> FENCE  3.5 — MLEF soft upper fence
 } as const
 
-// ─── Rasch Model ────────────────────────────────────────────────────────────
+// ─── Rasch Model ────────────────────────────────────────────────────────────────
 
 /**
+ * Rasch Probability:
  * P(correct | θ, b) = 1 / (1 + exp(-(θ - b)))
+ *
  * Probability that a student with ability θ answers correctly
- * an item with difficulty b.
+ * an item with difficulty parameter b.
  */
 export function raschProbability(theta: number, b: number): number {
   return 1 / (1 + Math.exp(-(theta - b)))
 }
 
 /**
- * Fisher Information for a Rasch item:
- * I(θ) = P(θ) * (1 - P(θ))
+ * Fisher Information for a single Rasch item at ability θ:
+ * I(θ) = P(θ) × (1 − P(θ))
+ *
+ * Maximum information occurs when θ = b (item difficulty matches ability).
  */
 export function fisherInformation(theta: number, b: number): number {
   const p = raschProbability(theta, b)
   return p * (1 - p)
 }
 
-// ─── Ability Estimation (MLE approximation) ─────────────────────────────────
+// ─── Ability Estimation (MLEF — MLE with Fence) ──────────────────────────────
 
 /**
- * Update theta after a single response using a Newton-Raphson step.
- * This is a single-iteration MLE approximation — good enough for
- * a prototype adaptive system.
+ * Update theta using Newton-Raphson MLE over all responses so far.
+ * This implements MLEF (MLE with Fence) as used in AllTestSim:
  *
- * Δθ = (response - P) / I(θ)
- * where response = 1 (correct) or 0 (wrong)
+ *   Δθ = Σ(u_i − P_i) / Σ I_i(θ)
+ *
+ * where u_i = 1 (correct) or 0 (wrong), P_i = Rasch probability,
+ * I_i = Fisher information.
+ *
+ * After estimation, apply MLEF fence then hard bounds.
  */
 export function updateTheta(
   currentTheta: number,
@@ -57,7 +76,6 @@ export function updateTheta(
 ): number {
   if (responses.length === 0) return currentTheta
 
-  // Newton-Raphson over all responses so far
   let numerator   = 0
   let denominator = 0
 
@@ -68,19 +86,30 @@ export function updateTheta(
     denominator += I
   }
 
-  if (denominator < 0.001) return currentTheta  // avoid division by zero
+  // Avoid division by zero (can happen with extreme ability estimates)
+  if (denominator < 0.001) return currentTheta
 
   const newTheta = currentTheta + numerator / denominator
 
-  // Clamp to realistic range
-  return Math.max(CAT_CONFIG.THETA_MIN, Math.min(CAT_CONFIG.THETA_MAX, newTheta))
+  // Step 1: Apply MLEF fence (soft boundary — prevents extreme jumps)
+  const fenced = Math.max(
+    CAT_CONFIG.FENCE_LOW,
+    Math.min(CAT_CONFIG.FENCE_HIGH, newTheta),
+  )
+
+  // Step 2: Apply hard bounds (absolute limits)
+  return Math.max(CAT_CONFIG.THETA_MIN, Math.min(CAT_CONFIG.THETA_MAX, fenced))
 }
 
 // ─── SEM Calculation ─────────────────────────────────────────────────────────
 
 /**
+ * Standard Error of Measurement:
  * SEM = 1 / √(Test Information)
- * Test Information = Σ I(θ) over all administered items
+ *
+ * Test Information = Σ I_i(θ) over all administered items.
+ * Lower SEM = more precise ability estimate.
+ * Target: SEM ≤ 0.30 (matches AllTestSim SEE threshold).
  */
 export function calculateSEM(theta: number, administeredItems: Item[]): number {
   if (administeredItems.length === 0) return 99.0
@@ -94,11 +123,16 @@ export function calculateSEM(theta: number, administeredItems: Item[]): number {
   return 1 / Math.sqrt(totalInfo)
 }
 
-// ─── Item Selection ───────────────────────────────────────────────────────────
+// ─── Item Selection (MFI — Maximum Fisher Information) ───────────────────────
 
 /**
- * Select the unanswered item whose difficulty (b) is closest to current θ.
- * This is Maximum Information Item Selection under the Rasch model.
+ * Select the next item using Maximum Fisher Information (MFI):
+ * Choose the unanswered Active item whose b-value is closest to current θ.
+ *
+ * Under the Rasch model, the item with b closest to θ provides the
+ * maximum Fisher information at that ability level.
+ *
+ * Matches AllTestSim: ISC> MFI
  */
 export function selectNextItem(
   theta: number,
@@ -118,49 +152,60 @@ export function selectNextItem(
   })
 }
 
-// ─── Stopping Rule ───────────────────────────────────────────────────────────
+// ─── Stopping Rule ────────────────────────────────────────────────────────────
 
-export type StopReason = 'max_items' | 'sem_threshold' | 'no_items' | 'consecutive_failures' | null
+export type StopReason = 'max_items' | 'sem_threshold' | 'no_items' | null
 
 /**
- * Count consecutive failures from the end of the responses array
+ * Variable-length stopping rule matching AllTestSim:
+ *  TL> Variable, Min: 10, Max: 30, SEE: 0.30
+ *
+ * Stop when:
+ *  1. No more items available
+ *  2. Hard cap: items administered ≥ MAX_ITEMS (30)
+ *  3. Precision reached: items ≥ MIN_ITEMS (10) AND SEM ≤ 0.30
+ *
+ * The MIN_ITEMS guard prevents early stopping before enough
+ * information has been collected for a reliable estimate.
  */
-function countConsecutiveFailures(responses: CATResponse[]): number {
-  if (responses.length === 0) return 0
-  let count = 0
-  for (let i = responses.length - 1; i >= 0; i--) {
-    if (!responses[i].isCorrect) {
-      count++
-    } else {
-      break
-    }
-  }
-  return count
-}
-
 export function checkStoppingRule(
   itemsAdministered: number,
   sem: number,
   nextItem: Item | null,
-  responses: CATResponse[] = [],
 ): StopReason {
-  if (itemsAdministered >= CAT_CONFIG.MAX_ITEMS)      return 'max_items'
-  if (sem <= CAT_CONFIG.SEM_THRESHOLD)                return 'sem_threshold'
-  if (!nextItem)                                      return 'no_items'
-  if (countConsecutiveFailures(responses) >= CAT_CONFIG.MAX_CONSECUTIVE_FAILURES) return 'consecutive_failures'
+  if (!nextItem)
+    return 'no_items'
+
+  if (itemsAdministered >= CAT_CONFIG.MAX_ITEMS)
+    return 'max_items'
+
+  if (itemsAdministered >= CAT_CONFIG.MIN_ITEMS && sem <= CAT_CONFIG.SEM_THRESHOLD)
+    return 'sem_threshold'
+
   return null
 }
 
 // ─── Ability Level Classification ─────────────────────────────────────────────
 
+/**
+ * Classify final theta into descriptive ability levels.
+ * Based on Rasch logit scale centered at 0:
+ *  Low:     θ < -0.5  (below average)
+ *  Average: -0.5 ≤ θ ≤ 0.5
+ *  High:    θ > 0.5   (above average)
+ */
 export function classifyAbility(theta: number): 'Low' | 'Average' | 'High' {
   if (theta < -0.5) return 'Low'
   if (theta > 0.5)  return 'High'
   return 'Average'
 }
 
-// ─── Test Information Function values ─────────────────────────────────────────
+// ─── Test Information ─────────────────────────────────────────────────────────
 
+/**
+ * Total Test Information at a given theta level.
+ * Higher = more precise measurement at that ability point.
+ */
 export function getTestInformation(theta: number, administeredItems: Item[]): number {
   return administeredItems.reduce(
     (sum, item) => sum + fisherInformation(theta, item.rasch_b_value),
