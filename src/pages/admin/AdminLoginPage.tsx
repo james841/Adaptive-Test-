@@ -21,9 +21,20 @@ export default function AdminLoginPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-    setLoading(false)
-    if (authError) { setError('Invalid email or password.'); return }
+    try {
+      const res = await supabase.auth.signInWithPassword({ email, password })
+      setLoading(false)
+      if (res.error) {
+        console.error('Supabase signIn error', res.error)
+        setError(res.error.message || 'Invalid email or password.')
+        return
+      }
+    } catch (err: any) {
+      console.error('Sign-in request failed', err)
+      setLoading(false)
+      setError('Network error. Please try again.')
+      return
+    }
     navigate('/admin/dashboard')
   }
 
