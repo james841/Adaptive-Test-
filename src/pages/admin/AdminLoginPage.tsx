@@ -21,20 +21,15 @@ export default function AdminLoginPage() {
     e.preventDefault()
     setError('')
     setLoading(true)
-    try {
-      const res = await supabase.auth.signInWithPassword({ email, password })
-      setLoading(false)
-      if (res.error) {
-        console.error('Supabase signIn error', res.error)
-        setError(res.error.message || 'Invalid email or password.')
-        return
-      }
-    } catch (err: any) {
-      console.error('Sign-in request failed', err)
-      setLoading(false)
-      setError('Network error. Please try again.')
+
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
+    setLoading(false)
+
+    if (authError) {
+      setError('Invalid email or password.')
       return
     }
+
     navigate('/admin/dashboard')
   }
 
@@ -42,7 +37,6 @@ export default function AdminLoginPage() {
     <PageShell className="bg-ink">
       <main className="flex-1 flex items-center justify-center px-4">
         <div className="w-full max-w-sm animate-fade-up">
-          {/* Logo */}
           <div className="mb-10 flex items-center gap-2">
             <div className="bg-chalk text-ink font-mono text-xs px-2 py-1 font-bold tracking-wider">CAT</div>
             <span className="font-display text-2xl tracking-wider text-chalk">SYSTEM</span>
@@ -74,9 +68,13 @@ export default function AdminLoginPage() {
                 required
               />
             </div>
+
             {error && (
-              <div className="border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-400">{error}</div>
+              <div className="border border-red-700 bg-red-900/30 px-4 py-3 text-sm text-red-400">
+                {error}
+              </div>
             )}
+
             <button
               type="submit"
               className="w-full bg-chalk text-ink font-body font-medium px-6 py-3 hover:bg-mist transition-colors disabled:opacity-40"

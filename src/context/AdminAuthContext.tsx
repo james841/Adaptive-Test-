@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
-import { checkIsAdmin } from '@/lib/api'
 
 interface AdminAuthContextType {
   isAdmin: boolean
@@ -19,13 +18,11 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let mounted = true
 
-    const updateAdminState = async (session: any) => {
+    const updateAdminState = (session: any) => {
       if (!mounted) return
       if (session?.user) {
-        const isAdminUser = await checkIsAdmin(session.user.id).catch(() => false)
-        if (!mounted) return
-        setIsAdmin(isAdminUser)
-        setAdminEmail(isAdminUser ? session.user.email ?? null : null)
+        setIsAdmin(true)
+        setAdminEmail(session.user.email ?? null)
       } else {
         setIsAdmin(false)
         setAdminEmail(null)
@@ -41,7 +38,10 @@ export function AdminAuthProvider({ children }: { children: React.ReactNode }) {
       updateAdminState(session)
     })
 
-    return () => { mounted = false; subscription.unsubscribe() }
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   const logout = async () => {
