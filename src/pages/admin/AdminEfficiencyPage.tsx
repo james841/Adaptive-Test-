@@ -79,7 +79,7 @@ export default function AdminEfficiencyPage() {
         ) : (
           <div className="space-y-8 mt-6">
             {/* Stat Overview */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
               <StatCard label="Total Tests" value={stats.total} />
               <StatCard 
                 label="Efficiency" 
@@ -92,6 +92,11 @@ export default function AdminEfficiencyPage() {
                 sub="Target ≤ 0.30" 
               />
               <StatCard label="Avg Duration" value={fmtTime(stats.avgTimeMs)} />
+              <StatCard 
+                label="Avg TIF" 
+                value={stats.avgTif.toFixed(2)} 
+                sub="Test Information (1 / SEM²)" 
+              />
             </div>
 
             {/* Charts Section */}

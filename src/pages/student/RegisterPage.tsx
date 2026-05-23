@@ -18,7 +18,8 @@ export default function RegisterPage() {
 
   const [form, setForm] = useState({
     full_name: '', gender: '' as 'Male' | 'Female' | '',
-    school: '', class: 'JSS2', username: '', password: '', confirm: '',
+    school: '', school_type: '' as 'Public' | 'Private' | '',
+    class: 'JSS2', username: '', password: '', confirm: '',
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -32,6 +33,7 @@ export default function RegisterPage() {
     setError('')
 
     if (!form.gender) return setError('Please select your gender.')
+    if (!form.school_type) return setError('Please select your school type.')
     if (form.password.length < 6) return setError('Password must be at least 6 characters.')
     if (form.password !== form.confirm) return setError('Passwords do not match.')
 
@@ -39,6 +41,7 @@ export default function RegisterPage() {
     const { student, error: err } = await registerStudent({
       full_name: form.full_name,
       gender: form.gender as 'Male' | 'Female',
+      school_type: form.school_type as 'Public' | 'Private',
       school: form.school,
       class: form.class,
       username: form.username.trim().toLowerCase(),
@@ -103,7 +106,7 @@ export default function RegisterPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                   <div className="md:col-span-2 space-y-1.5">
                     <label className="text-xs font-semibold text-slate-700 ml-1">School Name</label>
                     <div className="relative group">
@@ -115,6 +118,22 @@ export default function RegisterPage() {
                         onChange={update('school')}
                         required
                       />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-semibold text-slate-700 ml-1">School Type</label>
+                    <div className="relative">
+                      <select
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2.5 px-4 text-sm appearance-none focus:outline-none focus:ring-2 focus:ring-blue-600/20 focus:border-blue-600 transition-all"
+                        value={form.school_type}
+                        onChange={update('school_type')}
+                        required
+                      >
+                        <option value="">Select type</option>
+                        <option value="Public">Public</option>
+                        <option value="Private">Private</option>
+                      </select>
                     </div>
                   </div>
 

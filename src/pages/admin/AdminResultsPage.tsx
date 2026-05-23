@@ -29,6 +29,8 @@ function exportPDF(data: any[], filter: string) {
     <tr>
       <td>${i + 1}</td>
       <td>${s.students?.full_name ?? '—'}</td>
+      <td>${s.students?.gender ?? '—'}</td>
+      <td>${s.students?.school_type ?? '—'}</td>
       <td>${s.students?.school ?? '—'}</td>
       <td>${fmtTheta(s.final_theta)}</td>
       <td>${s.final_sem != null ? Number(s.final_sem).toFixed(3) : '—'}</td>
@@ -73,7 +75,7 @@ function exportPDF(data: any[], filter: string) {
       <table>
         <thead>
           <tr>
-            <th>#</th><th>Student Name</th><th>School</th>
+            <th>#</th><th>Student Name</th><th>Gender</th><th>School Type</th><th>School</th>
             <th>Final θ</th><th>SEM</th><th>Items</th>
             <th>Time Taken</th><th>Ability Level</th><th>Date</th>
           </tr>
@@ -96,13 +98,15 @@ function exportPDF(data: any[], filter: string) {
 
 function exportExcel(data: any[], filter: string) {
   const headers = [
-    '#', 'Student Name', 'School', 'Final Theta (θ)',
+    '#', 'Student Name', 'Gender', 'School Type', 'School', 'Final Theta (θ)',
     'SEM', 'Items Used', 'Time Taken', 'Ability Level', 'Date',
   ]
 
   const rows = data.map((s, i) => [
     i + 1,
     s.students?.full_name ?? '',
+    s.students?.gender ?? '',
+    s.students?.school_type ?? '',
     s.students?.school ?? '',
     fmtTheta(s.final_theta),
     s.final_sem != null ? Number(s.final_sem).toFixed(3) : '',
@@ -240,6 +244,8 @@ export default function AdminResultsPage() {
                   <tr className="bg-slate-50/50 border-b border-slate-200 text-[11px] uppercase tracking-widest text-slate-500 font-semibold">
                     <th className="px-6 py-4">#</th>
                     <th className="px-6 py-4">Student Name</th>
+                    <th className="px-6 py-4">Gender</th>
+                    <th className="px-6 py-4">School Type</th>
                     <th className="px-6 py-4">School</th>
                     <th className="px-6 py-4">Final θ</th>
                     <th className="px-6 py-4">SEM</th>
@@ -254,6 +260,8 @@ export default function AdminResultsPage() {
                     <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
                       <td className="px-6 py-4 font-mono text-xs text-slate-500">{i + 1}</td>
                       <td className="px-6 py-4 font-medium text-slate-900">{s.students?.full_name ?? '—'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{s.students?.gender ?? '—'}</td>
+                      <td className="px-6 py-4 text-sm text-slate-600">{s.students?.school_type ?? '—'}</td>
                       <td className="px-6 py-4 text-sm text-slate-600">{s.students?.school ?? '—'}</td>
                       <td className="px-6 py-4 font-mono text-xs text-slate-700">
                         {fmtTheta(s.final_theta)}

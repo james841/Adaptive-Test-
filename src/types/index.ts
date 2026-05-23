@@ -5,6 +5,7 @@ export interface Student {
   full_name: string
   gender: 'Male' | 'Female'
   school: string
+  school_type: 'Public' | 'Private'
   class: string
   username: string
   created_at: string

@@ -189,14 +189,14 @@ export function checkStoppingRule(
 
 /**
  * Classify final theta into descriptive ability levels.
- * Based on Rasch logit scale centered at 0:
- *  Low:     θ < -0.5  (below average)
- *  Average: -0.5 ≤ θ ≤ 0.5
- *  High:    θ > 0.5   (above average)
+ * Categories:
+ *  Low:     -4.00 ≤ θ < -1.33
+ *  Average: -1.33 ≤ θ < 1.33
+ *  High:    1.33 ≤ θ ≤ 4.00
  */
 export function classifyAbility(theta: number): 'Low' | 'Average' | 'High' {
-  if (theta < -0.5) return 'Low'
-  if (theta > 0.5)  return 'High'
+  if (theta < -1.33) return 'Low'
+  if (theta >= 1.33) return 'High'
   return 'Average'
 }
 

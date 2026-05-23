@@ -14,6 +14,7 @@ export async function registerStudent(data: {
   full_name: string
   gender: 'Male' | 'Female'
   school: string
+  school_type: 'Public' | 'Private'
   class: string
   username: string
   password: string
@@ -34,11 +35,12 @@ export async function registerStudent(data: {
       full_name:     data.full_name,
       gender:        data.gender,
       school:        data.school,
+      school_type:   data.school_type,
       class:         data.class,
       username:      data.username,
       password_hash,
     })
-    .select('id,full_name,gender,school,class,username,created_at')
+    .select('id,full_name,gender,school,school_type,class,username,created_at')
     .single()
 
   if (error) return { error: error.message }
@@ -67,7 +69,7 @@ export async function loginStudent(
 export async function getAllStudents(): Promise<Student[]> {
   const { data } = await supabase
     .from('students')
-    .select('id,full_name,gender,school,class,username,created_at')
+    .select('id,full_name,gender,school,school_type,class,username,created_at')
     .order('created_at', { ascending: false })
   return (data ?? []) as Student[]
 }
@@ -133,7 +135,7 @@ export async function completeTestSession(
 export async function getAllSessions() {
   const { data } = await supabase
     .from('test_sessions')
-    .select('*, students(full_name, school)')
+    .select('*, students(full_name, gender, school, school_type)')
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
   return data ?? []
@@ -193,11 +195,19 @@ export async function getEfficiencyStats() {
     return s + (new Date(r.end_time).getTime() - new Date(r.start_time).getTime())
   }, 0) / total
 
+  const testInfos = sessions
+    .map(s => Number(s.final_sem))
+    .filter((sem) => sem > 0)
+
+  const avgTif = testInfos.length > 0
+    ? testInfos.reduce((sum, sem) => sum + 1 / (sem * sem), 0) / testInfos.length
+    : 0
+
   const distribution = {
     Low:     sessions.filter(s => s.ability_level === 'Low').length,
     Average: sessions.filter(s => s.ability_level === 'Average').length,
     High:    sessions.filter(s => s.ability_level === 'High').length,
   }
 
-  return { avgItems, avgSem, avgTheta, avgTimeMs, total, distribution }
+  return { avgItems, avgSem, avgTheta, avgTimeMs, total, distribution, avgTif }
 }
