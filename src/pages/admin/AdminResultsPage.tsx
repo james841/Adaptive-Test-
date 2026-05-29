@@ -21,7 +21,12 @@ function fmtTheta(val: any): string {
   const n = Number(val)
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}`
 }
-
+function fmtTif(sem: any): string {
+  if (sem == null) return '—'
+  const n = Number(sem)
+  if (n <= 0) return '—'
+  return (1 / (n * n)).toFixed(2)
+}
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 
 function exportPDF(data: any[], filter: string) {
@@ -34,6 +39,7 @@ function exportPDF(data: any[], filter: string) {
       <td>${s.students?.school ?? '—'}</td>
       <td>${fmtTheta(s.final_theta)}</td>
       <td>${s.final_sem != null ? Number(s.final_sem).toFixed(3) : '—'}</td>
+      <td>${fmtTif(s.final_sem)}</td>
       <td>${s.total_items_administered}</td>
       <td>${fmtDuration(s.start_time, s.end_time)}</td>
       <td>${s.ability_level ?? '—'}</td>
@@ -76,7 +82,7 @@ function exportPDF(data: any[], filter: string) {
         <thead>
           <tr>
             <th>#</th><th>Student Name</th><th>Gender</th><th>School Type</th><th>School</th>
-            <th>Final θ</th><th>SEM</th><th>Items</th>
+            <th>Final θ</th><th>SEM</th><th>TIF</th><th>Items</th>
             <th>Time Taken</th><th>Ability Level</th><th>Date</th>
           </tr>
         </thead>
@@ -99,7 +105,7 @@ function exportPDF(data: any[], filter: string) {
 function exportExcel(data: any[], filter: string) {
   const headers = [
     '#', 'Student Name', 'Gender', 'School Type', 'School', 'Final Theta (θ)',
-    'SEM', 'Items Used', 'Time Taken', 'Ability Level', 'Date',
+    'SEM', 'TIF', 'Items Used', 'Time Taken', 'Ability Level', 'Date',
   ]
 
   const rows = data.map((s, i) => [
@@ -110,6 +116,7 @@ function exportExcel(data: any[], filter: string) {
     s.students?.school ?? '',
     fmtTheta(s.final_theta),
     s.final_sem != null ? Number(s.final_sem).toFixed(3) : '',
+    fmtTif(s.final_sem),
     s.total_items_administered,
     fmtDuration(s.start_time, s.end_time),
     s.ability_level ?? '',
@@ -249,6 +256,7 @@ export default function AdminResultsPage() {
                     <th className="px-6 py-4">School</th>
                     <th className="px-6 py-4">Final θ</th>
                     <th className="px-6 py-4">SEM</th>
+                    <th className="px-6 py-4">TIF</th>
                     <th className="px-6 py-4">Items Used</th>
                     <th className="px-6 py-4">Time Taken</th>
                     <th className="px-6 py-4">Ability Level</th>
@@ -268,6 +276,9 @@ export default function AdminResultsPage() {
                       </td>
                       <td className="px-6 py-4 font-mono text-xs text-slate-700">
                         {s.final_sem != null ? Number(s.final_sem).toFixed(3) : '—'}
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs text-slate-700">
+                        {fmtTif(s.final_sem)}
                       </td>
                       <td className="px-6 py-4 text-center font-semibold text-slate-900">
                         {s.total_items_administered}

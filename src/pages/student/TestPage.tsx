@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { Navigate, useNavigate } from 'react-router-dom'
 import { StudentNav } from '@/components/StudentNav'
-import { PageShell, PageLoader, Spinner } from '@/components/ui'
+import { PageShell, PageLoader } from '@/components/ui'
 import { useStudentAuth } from '@/context/StudentAuthContext'
 import { Info, ArrowRight, Loader2 } from 'lucide-react'
 import {
@@ -10,6 +10,7 @@ import {
   updateTheta,
   calculateSEM,
   checkStoppingRule,
+  buildTopicCounts,
 } from '@/lib/catEngine'
 import {
   getActiveItems,
@@ -21,19 +22,18 @@ import type { Item, CATResponse, AnswerOption } from '@/types'
 
 export default function TestPage() {
   const { student } = useStudentAuth()
-  const navigate = useNavigate()
+  const navigate    = useNavigate()
 
-  const [items, setItems] = useState<Item[]>([])
-  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [items,       setItems]       = useState<Item[]>([])
+  const [sessionId,   setSessionId]   = useState<string | null>(null)
   const [currentItem, setCurrentItem] = useState<Item | null>(null)
-  const [theta, setTheta] = useState<number>(CAT_CONFIG.INITIAL_THETA)
-  const [sem, setSem] = useState<number>(99.0)
-  const [responses, setResponses] = useState<CATResponse[]>([])
+  const [theta,       setTheta]       = useState<number>(CAT_CONFIG.INITIAL_THETA)
+  const [sem,         setSem]         = useState<number>(99.0)
+  const [responses,   setResponses]   = useState<CATResponse[]>([])
   const [answeredIds, setAnsweredIds] = useState<string[]>([])
-  const [selected, setSelected] = useState<AnswerOption | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  // removed consecutive-failure modal state
+  const [selected,    setSelected]    = useState<AnswerOption | null>(null)
+  const [loading,     setLoading]     = useState(true)
+  const [submitting,  setSubmitting]  = useState(false)
 
   const itemStartRef = useRef<number>(Date.now())
   const testStartRef = useRef<number>(Date.now())
@@ -50,12 +50,15 @@ export default function TestPage() {
       setItems(allItems)
       setSessionId(session.id)
       testStartRef.current = Date.now()
-      const firstItem = selectNextItem(CAT_CONFIG.INITIAL_THETA, allItems, [])
+
+      // First item: no topic counts yet, theta = 0
+      const firstItem = selectNextItem(CAT_CONFIG.INITIAL_THETA, allItems, [], {})
       setCurrentItem(firstItem)
       itemStartRef.current = Date.now()
       setLoading(false)
     }
     init()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const finishTest = useCallback(
@@ -66,10 +69,10 @@ export default function TestPage() {
         state: {
           finalTheta,
           finalSem,
-          totalItems: finalResponses.length,
+          totalItems:   finalResponses.length,
           totalCorrect: finalResponses.filter(r => r.isCorrect).length,
-          timeTakenMs: Date.now() - testStartRef.current,
-          responses: finalResponses,
+          timeTakenMs:  Date.now() - testStartRef.current,
+          responses:    finalResponses,
         },
       })
     },
@@ -80,39 +83,46 @@ export default function TestPage() {
     if (!selected || !currentItem || !sessionId || submitting) return
     setSubmitting(true)
 
-    const isCorrect = selected === currentItem.correct_answer
+    const isCorrect      = selected === currentItem.correct_answer
     const responseTimeMs = Date.now() - itemStartRef.current
-    const thetaBefore = theta
+    const thetaBefore    = theta
 
     const newResp: CATResponse = {
-      item: currentItem,
+      item:           currentItem,
       selectedAnswer: selected,
       isCorrect,
       thetaBefore,
-      thetaAfter: thetaBefore,
-      semAfter: sem,
+      thetaAfter:     thetaBefore,  // updated below
+      semAfter:       sem,
       responseTimeMs,
     }
 
     const updatedResponses = [...responses, newResp]
+
+    // ── Update theta using all responses so far ──────────────────────────────
     const newTheta = updateTheta(thetaBefore, updatedResponses)
-    const newSem = calculateSEM(newTheta, updatedResponses.map(r => r.item))
+    const newSem   = calculateSEM(newTheta, updatedResponses.map(r => r.item))
 
     newResp.thetaAfter = newTheta
-    newResp.semAfter = newSem
+    newResp.semAfter   = newSem
 
+    // Save response to DB (non-blocking)
     saveResponse(sessionId, student.id, newResp, updatedResponses.length)
 
+    // Update state
     setTheta(newTheta)
     setSem(newSem)
     setResponses(updatedResponses)
     const newAnswered = [...answeredIds, currentItem.id]
     setAnsweredIds(newAnswered)
 
-    await new Promise(r => setTimeout(r, 900))
+    // Brief pause so student sees feedback
+    await new Promise(r => setTimeout(r, 600))
 
-    const nextItem = selectNextItem(newTheta, items, newAnswered)
-    const stop = checkStoppingRule(updatedResponses.length, newSem, nextItem)
+    // ── Select next item with exposure control + content balancing ────────────
+    const topicCounts = buildTopicCounts(updatedResponses)
+    const nextItem    = selectNextItem(newTheta, items, newAnswered, topicCounts)
+    const stop        = checkStoppingRule(updatedResponses.length, newSem, nextItem)
 
     if (stop) {
       await finishTest(updatedResponses, newTheta, newSem)
@@ -126,7 +136,7 @@ export default function TestPage() {
 
   if (loading || !currentItem) return <PageLoader />
 
-  const progress = (responses.length / CAT_CONFIG.MAX_ITEMS) * 100
+  const progress  = (responses.length / CAT_CONFIG.MAX_ITEMS) * 100
   const optionMap: Record<AnswerOption, string> = {
     A: currentItem.option_a,
     B: currentItem.option_b,
@@ -138,22 +148,23 @@ export default function TestPage() {
     <PageShell>
       <StudentNav />
 
-      {/* Persistent Progress Header */}
+      {/* Progress Header */}
       <div className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200">
         <div className="max-w-4xl mx-auto px-4 py-3 flex items-center gap-4">
-           <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
-             <div 
-               className="h-full bg-blue-600 transition-all duration-500 ease-out" 
-               style={{ width: `${progress}%` }} 
-             />
-           </div>
-           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
-             {responses.length} / {CAT_CONFIG.MAX_ITEMS} Items
-           </span>
+          <div className="flex-1 bg-slate-100 h-2 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-blue-600 transition-all duration-500 ease-out"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
+            {responses.length} / {CAT_CONFIG.MAX_ITEMS} Items
+          </span>
         </div>
       </div>
 
       <main className="flex-1 max-w-3xl mx-auto w-full px-4 py-8 md:py-12">
+
         {/* Question Meta */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">
@@ -161,19 +172,25 @@ export default function TestPage() {
               {responses.length + 1}
             </div>
             <div>
-              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">Current Sub-topic</p>
+              <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
+                {currentItem.topic}
+              </p>
               <h3 className="font-semibold text-slate-800">{currentItem.sub_topic}</h3>
             </div>
           </div>
-          
+
           <div className="hidden md:flex items-center gap-6 bg-slate-50 px-4 py-2 rounded-xl border border-slate-100">
             <div className="text-right">
               <p className="text-[10px] font-bold text-slate-400 uppercase">SEM</p>
-              <p className="font-mono text-xs font-bold">{sem > 9 ? '—' : sem.toFixed(3)}</p>
+              <p className="font-mono text-xs font-bold">
+                {sem > 9 ? '—' : sem.toFixed(3)}
+              </p>
             </div>
             <div className="text-right">
-              <p className="text-[10px] font-bold text-slate-400 uppercase">Ability</p>
-              <p className="font-mono text-xs font-bold">θ {theta.toFixed(2)}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase">Ability θ</p>
+              <p className="font-mono text-xs font-bold">
+                {theta >= 0 ? '+' : ''}{theta.toFixed(2)}
+              </p>
             </div>
           </div>
         </div>
@@ -189,7 +206,6 @@ export default function TestPage() {
           <div className="p-6 md:p-8 grid grid-cols-1 gap-3">
             {(Object.keys(optionMap) as AnswerOption[]).map(key => {
               const isSelected = selected === key
-
               const variantCls = isSelected
                 ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600/10'
                 : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
@@ -201,7 +217,12 @@ export default function TestPage() {
                   onClick={() => setSelected(key)}
                   className={`group flex items-center p-4 rounded-2xl border-2 transition-all duration-200 text-left ${variantCls}`}
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-sm font-bold mr-4 transition-colors ${isSelected ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'}`}>
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-sm font-bold mr-4 transition-colors
+                    ${isSelected
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'
+                    }`}
+                  >
                     {key}
                   </div>
                   <span className="flex-1 font-semibold">{optionMap[key]}</span>
@@ -211,13 +232,13 @@ export default function TestPage() {
           </div>
         </div>
 
-        {/* Footer Actions */}
+        {/* Submit */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-slate-400">
             <Info className="w-4 h-4" />
             <p className="text-xs italic">Select your answer and click submit to continue.</p>
           </div>
-          
+
           <button
             className="w-full md:w-auto flex items-center justify-center gap-2 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold transition-all hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleSubmit}
@@ -231,8 +252,6 @@ export default function TestPage() {
           </button>
         </div>
       </main>
-
-      
     </PageShell>
   )
 }
