@@ -16,8 +16,8 @@ import type { Item, CATResponse } from '@/types'
 export const CAT_CONFIG = {
   INITIAL_THETA:      0.00,   // Starting ability — average student assumed
   MAX_ITEMS:          30,     // Hard stop — never exceed 30 questions
-  MIN_ITEMS:          10,     // Must answer at least 10 before SEM stop
-  SEM_THRESHOLD:      0.80,   // Stop when measurement is precise enough
+  MIN_ITEMS:          10,     // Must answer at least 15 before SEM stop
+  SEM_THRESHOLD:      0.4,   // Stop when measurement is precise enough
   THETA_MIN:         -4.0,    // Absolute lower bound
   THETA_MAX:          4.0,    // Absolute upper bound
   FENCE_LOW:         -3.5,    // MLEF soft lower fence
