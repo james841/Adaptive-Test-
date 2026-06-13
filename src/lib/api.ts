@@ -14,6 +14,7 @@ export async function registerStudent(data: {
   full_name: string
   gender: 'Male' | 'Female'
   school: string
+  school_type: 'Public' | 'Private'
   class: string
   username: string
   password: string
@@ -204,6 +205,10 @@ export async function getEfficiencyStats() {
 
   const avgItems = sessions.reduce((s, r) => s + (r.total_items_administered ?? 0), 0) / sessions.length
   const avgSem   = sessions.reduce((s, r) => s + (r.final_sem ?? 0), 0) / sessions.length
+  const avgTif   = sessions.reduce((s, r) => {
+    const sem = r.final_sem ?? 0
+    return s + (sem > 0 ? 1 / (sem * sem) : 0)
+  }, 0) / sessions.length
   const avgTheta = sessions.reduce((s, r) => s + (r.final_theta ?? 0), 0) / sessions.length
 
   const avgTimeMs = sessions.reduce((s, r) => {
@@ -217,7 +222,7 @@ export async function getEfficiencyStats() {
     High:    sessions.filter(s => s.ability_level === 'High').length,
   }
 
-  return { avgItems, avgSem, avgTheta, avgTimeMs, total: sessions.length, distribution }
+  return { avgItems, avgSem, avgTif, avgTheta, avgTimeMs, total: sessions.length, distribution }
 }
 
 // ─── Item Stats (times_administered, times_correct, exposure_rate) ────────────
