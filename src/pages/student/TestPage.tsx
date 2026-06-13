@@ -11,12 +11,14 @@ import {
   calculateSEM,
   checkStoppingRule,
   buildTopicCounts,
+  applyRoutingStage,
 } from '@/lib/catEngine'
 import {
   getActiveItems,
   createTestSession,
   saveResponse,
   completeTestSession,
+  incrementItemStats,
 } from '@/lib/api'
 import type { Item, CATResponse, AnswerOption } from '@/types'
 
@@ -50,8 +52,7 @@ export default function TestPage() {
       setItems(allItems)
       setSessionId(session.id)
       testStartRef.current = Date.now()
-
-      // First item: no topic counts yet, theta = 0
+      // Start with theta = 0, no topic counts yet
       const firstItem = selectNextItem(CAT_CONFIG.INITIAL_THETA, allItems, [], {})
       setCurrentItem(firstItem)
       itemStartRef.current = Date.now()
@@ -92,37 +93,58 @@ export default function TestPage() {
       selectedAnswer: selected,
       isCorrect,
       thetaBefore,
-      thetaAfter:     thetaBefore,  // updated below
+      thetaAfter:     thetaBefore,
       semAfter:       sem,
       responseTimeMs,
     }
 
     const updatedResponses = [...responses, newResp]
 
-    // ── Update theta using all responses so far ──────────────────────────────
-    const newTheta = updateTheta(thetaBefore, updatedResponses)
-    const newSem   = calculateSEM(newTheta, updatedResponses.map(r => r.item))
+    // ── Routing stage: after first 3 items jump theta to better estimate ──
+    let newTheta: number
+    if (updatedResponses.length === CAT_CONFIG.ROUTING_ITEMS) {
+      newTheta = applyRoutingStage(updatedResponses)
+    } else {
+      newTheta = updateTheta(thetaBefore, updatedResponses)
+    }
+
+    const newSem = calculateSEM(newTheta, updatedResponses.map(r => r.item))
 
     newResp.thetaAfter = newTheta
     newResp.semAfter   = newSem
 
-    // Save response to DB (non-blocking)
+    // ── Save response to DB (non-blocking) ───────────────────────────────
     saveResponse(sessionId, student.id, newResp, updatedResponses.length)
 
-    // Update state
+    // ── Update item stats in DB (times_administered, times_correct, exposure_rate)
+    incrementItemStats(currentItem.id, isCorrect)
+
+    // ── Update local item list so exposure_rate is current ───────────────
+    setItems(prev => prev.map(item => {
+      if (item.id !== currentItem.id) return item
+      const newAdministered = (item.times_administered ?? 0) + 1
+      const newCorrect      = (item.times_correct ?? 0) + (isCorrect ? 1 : 0)
+      return {
+        ...item,
+        times_administered: newAdministered,
+        times_correct:      newCorrect,
+      }
+    }))
+
     setTheta(newTheta)
     setSem(newSem)
     setResponses(updatedResponses)
     const newAnswered = [...answeredIds, currentItem.id]
     setAnsweredIds(newAnswered)
 
-    // Brief pause so student sees feedback
     await new Promise(r => setTimeout(r, 600))
 
-    // ── Select next item with exposure control + content balancing ────────────
+    // ── Select next item with updated theta + topic counts ───────────────
     const topicCounts = buildTopicCounts(updatedResponses)
     const nextItem    = selectNextItem(newTheta, items, newAnswered, topicCounts)
-    const stop        = checkStoppingRule(updatedResponses.length, newSem, nextItem)
+
+    // ── Check all stopping rules including theta stability ────────────────
+    const stop = checkStoppingRule(updatedResponses.length, newSem, nextItem, updatedResponses)
 
     if (stop) {
       await finishTest(updatedResponses, newTheta, newSem)
@@ -144,6 +166,9 @@ export default function TestPage() {
     D: currentItem.option_d,
   }
 
+  // Routing stage indicator
+  const isRouting = responses.length < CAT_CONFIG.ROUTING_ITEMS
+
   return (
     <PageShell>
       <StudentNav />
@@ -158,7 +183,7 @@ export default function TestPage() {
             />
           </div>
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest whitespace-nowrap">
-            {responses.length} / {CAT_CONFIG.MAX_ITEMS} Items
+            {responses.length} / {CAT_CONFIG.MAX_ITEMS}
           </span>
         </div>
       </div>
@@ -173,7 +198,7 @@ export default function TestPage() {
             </div>
             <div>
               <p className="text-[10px] font-bold text-blue-600 uppercase tracking-widest">
-                {currentItem.topic}
+                {isRouting ? 'Warm-up Stage' : currentItem.topic}
               </p>
               <h3 className="font-semibold text-slate-800">{currentItem.sub_topic}</h3>
             </div>
@@ -206,23 +231,22 @@ export default function TestPage() {
           <div className="p-6 md:p-8 grid grid-cols-1 gap-3">
             {(Object.keys(optionMap) as AnswerOption[]).map(key => {
               const isSelected = selected === key
-              const variantCls = isSelected
-                ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600/10'
-                : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
-
               return (
                 <button
                   key={key}
                   disabled={submitting}
                   onClick={() => setSelected(key)}
-                  className={`group flex items-center p-4 rounded-2xl border-2 transition-all duration-200 text-left ${variantCls}`}
+                  className={`group flex items-center p-4 rounded-2xl border-2 transition-all duration-200 text-left ${
+                    isSelected
+                      ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600/10'
+                      : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/30'
+                  }`}
                 >
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-sm font-bold mr-4 transition-colors
-                    ${isSelected
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-mono text-sm font-bold mr-4 transition-colors ${
+                    isSelected
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-100 text-slate-500 group-hover:bg-blue-100 group-hover:text-blue-600'
-                    }`}
-                  >
+                  }`}>
                     {key}
                   </div>
                   <span className="flex-1 font-semibold">{optionMap[key]}</span>
@@ -238,7 +262,6 @@ export default function TestPage() {
             <Info className="w-4 h-4" />
             <p className="text-xs italic">Select your answer and click submit to continue.</p>
           </div>
-
           <button
             className="w-full md:w-auto flex items-center justify-center gap-2 bg-slate-900 text-white px-10 py-4 rounded-2xl font-bold transition-all hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
             onClick={handleSubmit}

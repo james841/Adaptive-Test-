@@ -1,88 +1,69 @@
 /**
  * CAT Engine — Rasch-Based Computerised Adaptive Testing
  *
- * Matches AllTestSim configuration + research document requirements:
- *  - MODE:  CAT
- *  - ISC:   MFI  (Maximum Fisher Information)
- *  - SE:    MLEF (MLE with Fence)
- *  - TL:    Variable MIN 15, MAX 30, SEE 0.30
- *  - IEC:   Exposure rate cap at 0.25
- *  - CB:    Topic balancing enforced
+ * Implements all recommendations for SEM target 0.35:
+ *  ✅ True Fisher Information item selection
+ *  ✅ Damped theta updates (prevents oscillation)
+ *  ✅ 3-question routing stage (faster ability targeting)
+ *  ✅ Theta stability tracking (stops when theta settles)
+ *  ✅ Content balancing only after item 10
+ *  ✅ Exposure control disabled (MAX_EXPOSURE_RATE = 1.0)
+ *  ✅ MAX_ITEMS = 40, MIN_ITEMS = 10, SEM_THRESHOLD = 0.35
  */
 
 import type { Item, CATResponse } from '@/types'
 
 // ─── Configuration ─────────────────────────────────────────────────────────────
 export const CAT_CONFIG = {
-  INITIAL_THETA:      0.00,   // Starting ability — average student assumed
-  MAX_ITEMS:          30,     // Hard stop — never exceed 30 questions
-  MIN_ITEMS:          10,     // Must answer at least 15 before SEM stop
-  SEM_THRESHOLD:      0.4,   // Stop when measurement is precise enough
-  THETA_MIN:         -4.0,    // Absolute lower bound
-  THETA_MAX:          4.0,    // Absolute upper bound
-  FENCE_LOW:         -3.5,    // MLEF soft lower fence
-  FENCE_HIGH:         3.5,    // MLEF soft upper fence
-  MAX_EXPOSURE_RATE:  0.50,   // Skip items used in >25% of all tests
+  INITIAL_THETA:      0.00,
+  MAX_ITEMS:          40,     // Increased — some students need 33+ to reach 0.35
+  MIN_ITEMS:          10,     // Never stop before 10
+  SEM_THRESHOLD:      0.35,   // Official target
+  THETA_MIN:         -4.0,
+  THETA_MAX:          4.0,
+  FENCE_LOW:         -3.5,
+  FENCE_HIGH:         3.5,
+  MAX_EXPOSURE_RATE:  1.0,    // Disabled — always pick most informative item
+  DAMPING_FACTOR:     0.5,    // Max theta jump per update (prevents oscillation)
+  STABILITY_WINDOW:   3,      // Track last 3 theta changes
+  STABILITY_THRESHOLD: 0.1,   // Stop if all last 3 changes < 0.1
+  ROUTING_ITEMS:      3,      // Stage 1: 3 routing items before full CAT
 } as const
 
 // ─── Content Balancing Quotas ─────────────────────────────────────────────────
-// Max items per topic across the full 30-item test
-// Prevents the test from being dominated by one topic
+// Only enforced AFTER first 10 items (early CAT focuses on ability measurement)
 export const TOPIC_QUOTAS: Record<string, number> = {
-  'Algebra':              8,
-  'Number & Numeration':  7,
-  'Fractions':            4,
-  'Statistics':           4,
-  'Geometry':             4,
-  'Ratio':                3,
-  'Percentage':           3,
+  'Algebra':             10,
+  'Number & Numeration': 10,
+  'Fractions':            5,
+  'Statistics':           5,
+  'Geometry':             5,
+  'Ratio':                4,
+  'Percentage':           4,
 }
-const DEFAULT_TOPIC_QUOTA = 3
+const DEFAULT_TOPIC_QUOTA = 4
 
 // ─── Rasch Probability ────────────────────────────────────────────────────────
-
-/**
- * P(correct | θ, b) = 1 / (1 + exp(-(θ - b)))
- *
- * Answers: "Given a student with ability θ, what is the
- * probability they answer an item of difficulty b correctly?"
- *
- * When θ = b → P = 0.5 (50/50 chance — ideal targeting point)
- * When θ >> b → P approaches 1 (too easy)
- * When θ << b → P approaches 0 (too hard)
- */
 export function raschProbability(theta: number, b: number): number {
   return 1 / (1 + Math.exp(-(theta - b)))
 }
 
 // ─── Fisher Information ───────────────────────────────────────────────────────
-
-/**
- * I(θ) = P(θ) × (1 − P(θ))
- *
- * How much information one item gives about ability θ.
- * Maximum at θ = b. Used to compute SEM and select best items.
- */
 export function fisherInformation(theta: number, b: number): number {
   const p = raschProbability(theta, b)
   return p * (1 - p)
 }
 
-// ─── Theta Update (MLEF) ──────────────────────────────────────────────────────
-
+// ─── Theta Update (Damped Newton-Raphson MLEF) ────────────────────────────────
 /**
- * Updates ability estimate using Newton-Raphson MLE over all responses.
+ * Full Newton-Raphson over all responses with damping.
  *
- * Per the research document:
- *   If correct:  theta = theta + (0.5 × (1 - P))
- *   If wrong:    theta = theta - (0.5 × P)
+ * Damping prevents theta from oscillating wildly on mixed responses:
+ *   Raw step = Σ(score - P) / Σ I(θ)
+ *   Damped step = clamp(raw step, -0.5, +0.5)
  *
- * For a single response this simplifies to:
- *   Δθ = 0.5 × (score - P)  where score = 1 or 0
- *
- * We use the full Newton-Raphson accumulation over ALL responses
- * which is more statistically accurate for multiple items.
- * Then apply MLEF fence and hard bounds.
+ * This means theta can move at most 0.5 logits per update,
+ * preventing the 2.5 → 1.8 → 2.7 → 1.9 oscillation pattern.
  */
 export function updateTheta(
   currentTheta: number,
@@ -90,17 +71,16 @@ export function updateTheta(
 ): number {
   if (responses.length === 0) return currentTheta
 
-  // Single response: use simple formula from research document
+  // Single response — simple damped update
   if (responses.length === 1) {
     const r = responses[0]
     const p = raschProbability(currentTheta, r.item.rasch_b_value)
-    const delta = r.isCorrect
-      ? 0.5 * (1 - p)   // correct: move up proportional to difficulty
-      : -0.5 * p         // wrong:   move down proportional to easiness
-    return clamp(currentTheta + delta)
+    const raw = r.isCorrect ? 0.5 * (1 - p) : -0.5 * p
+    const damped = Math.max(-CAT_CONFIG.DAMPING_FACTOR, Math.min(CAT_CONFIG.DAMPING_FACTOR, raw))
+    return clamp(currentTheta + damped)
   }
 
-  // Multiple responses: full Newton-Raphson MLE (more accurate)
+  // Multiple responses — full Newton-Raphson with damping
   let numerator   = 0
   let denominator = 0
 
@@ -113,23 +93,40 @@ export function updateTheta(
 
   if (denominator < 0.001) return currentTheta
 
-  return clamp(currentTheta + numerator / denominator)
+  const rawStep    = numerator / denominator
+  const dampedStep = Math.max(
+    -CAT_CONFIG.DAMPING_FACTOR,
+    Math.min(CAT_CONFIG.DAMPING_FACTOR, rawStep),
+  )
+
+  return clamp(currentTheta + dampedStep)
 }
 
-// Apply MLEF fence then hard bounds
 function clamp(theta: number): number {
   const fenced = Math.max(CAT_CONFIG.FENCE_LOW, Math.min(CAT_CONFIG.FENCE_HIGH, theta))
   return Math.max(CAT_CONFIG.THETA_MIN, Math.min(CAT_CONFIG.THETA_MAX, fenced))
 }
 
-// ─── SEM Calculation ──────────────────────────────────────────────────────────
-
+// ─── Routing Stage (3-question warm-up) ──────────────────────────────────────
 /**
- * SEM = 1 / √(Σ Fisher Information over all administered items)
+ * After first 3 items, jump theta to a better starting estimate.
+ * This prevents wasting 5-8 questions converging from 0.
  *
- * Starts near 99 (no information), decreases as items are answered.
- * Target: SEM ≤ 0.30 means ability is measured precisely enough.
+ *   3/3 correct  → theta = +1.5  (strong student)
+ *   2/3 correct  → theta = +0.5  (above average)
+ *   1/3 correct  → theta = -0.5  (below average)
+ *   0/3 correct  → theta = -1.5  (weak student)
  */
+export function applyRoutingStage(responses: CATResponse[]): number {
+  if (responses.length !== CAT_CONFIG.ROUTING_ITEMS) return CAT_CONFIG.INITIAL_THETA
+  const correct = responses.filter(r => r.isCorrect).length
+  if (correct === 3) return  1.5
+  if (correct === 2) return  0.5
+  if (correct === 1) return -0.5
+  return -1.5
+}
+
+// ─── SEM Calculation ──────────────────────────────────────────────────────────
 export function calculateSEM(theta: number, administeredItems: Item[]): number {
   if (administeredItems.length === 0) return 99.0
   const totalInfo = administeredItems.reduce(
@@ -140,24 +137,33 @@ export function calculateSEM(theta: number, administeredItems: Item[]): number {
   return 1 / Math.sqrt(totalInfo)
 }
 
-// ─── Item Selection (MFI + Exposure Control + Content Balancing) ─────────────
-
+// ─── Theta Stability Check ────────────────────────────────────────────────────
 /**
- * Selects the best next item applying 3 rules in order:
+ * Track the last 3 theta changes.
+ * If all 3 are < 0.1, theta has stabilised — ability is known.
+ * Used as an additional stopping signal alongside SEM.
+ */
+export function isThetaStable(responses: CATResponse[]): boolean {
+  const n = responses.length
+  if (n < CAT_CONFIG.STABILITY_WINDOW + 1) return false
+
+  const recent = responses.slice(-CAT_CONFIG.STABILITY_WINDOW - 1)
+  const deltas = recent.slice(1).map((r, i) =>
+    Math.abs(r.thetaAfter - recent[i].thetaAfter),
+  )
+
+  return deltas.every(d => d < CAT_CONFIG.STABILITY_THRESHOLD)
+}
+
+// ─── Item Selection (True MFI + Exposure + Conditional Balancing) ────────────
+/**
+ * TRUE Fisher Information Maximisation:
+ *   Pick item that maximises I(θ) = P(θ)(1-P(θ)) at current theta.
+ *   (NOT just closest b-value — actual information computed)
  *
- * 1. EXPOSURE CONTROL — skip items with exposure_rate > 0.25
- *    (prevents item overuse and test security issues)
- *
- * 2. CONTENT BALANCING — skip items from topics that have
- *    already hit their quota in this test session
- *    (ensures balanced topic coverage)
- *
- * 3. MFI SELECTION — from remaining eligible items, pick the
- *    one with b-value closest to current theta
- *    (maximises Fisher information = most adaptive)
- *
- * Falls back gracefully: if exposure/balancing filters leave
- * nothing, relaxes constraints to avoid running out of items.
+ * Content balancing only applied AFTER item 10.
+ * Exposure control effectively disabled (rate = 1.0).
+ * Graceful fallback if filters leave nothing.
  */
 export function selectNextItem(
   theta: number,
@@ -165,55 +171,51 @@ export function selectNextItem(
   answeredIds: string[],
   topicCounts: Record<string, number> = {},
 ): Item | null {
-  // Base pool: active, not yet answered
   const pool = allItems.filter(
     item => item.item_status === 'Active' && !answeredIds.includes(item.id),
   )
   if (pool.length === 0) return null
 
-  // Step 1: Apply exposure control
+  // Exposure control (effectively off with rate = 1.0)
   const exposureFiltered = pool.filter(
     item => (item.exposure_rate ?? 0) <= CAT_CONFIG.MAX_EXPOSURE_RATE,
   )
+  const afterExposure = exposureFiltered.length > 0 ? exposureFiltered : pool
 
-  // Step 2: Apply content balancing
-  const balancedPool = (exposureFiltered.length > 0 ? exposureFiltered : pool).filter(item => {
-    const quota = TOPIC_QUOTAS[item.topic] ?? DEFAULT_TOPIC_QUOTA
-    const used  = topicCounts[item.topic] ?? 0
-    return used < quota
-  })
+  // Content balancing — only enforce after first 10 items
+  let eligible = afterExposure
+  if (answeredIds.length >= 10) {
+    const balanced = afterExposure.filter(item => {
+      const quota = TOPIC_QUOTAS[item.topic] ?? DEFAULT_TOPIC_QUOTA
+      const used  = topicCounts[item.topic] ?? 0
+      return used < quota
+    })
+    eligible = balanced.length > 0 ? balanced : afterExposure
+  }
 
-  // Fallback: if balancing leaves nothing, use exposure-filtered pool
-  // If that's also empty, use full pool (graceful degradation)
-  const eligible =
-    balancedPool.length > 0
-      ? balancedPool
-      : exposureFiltered.length > 0
-      ? exposureFiltered
-      : pool
-
-  // Step 3: MFI — pick item with b-value closest to current theta
+  // TRUE MFI — maximise actual Fisher Information at current theta
   return eligible.reduce((best, item) => {
-    const distBest = Math.abs(best.rasch_b_value - theta)
-    const distCurr = Math.abs(item.rasch_b_value - theta)
-    return distCurr < distBest ? item : best
+    const bestInfo = fisherInformation(theta, best.rasch_b_value)
+    const itemInfo = fisherInformation(theta, item.rasch_b_value)
+    return itemInfo > bestInfo ? item : best
   })
 }
 
 // ─── Stopping Rule ────────────────────────────────────────────────────────────
-
-export type StopReason = 'max_items' | 'sem_threshold' | 'no_items' | null
+export type StopReason = 'max_items' | 'sem_threshold' | 'theta_stable' | 'no_items' | null
 
 /**
- * Variable-length stopping:
- *   - Never stop before MIN_ITEMS (15)
- *   - Stop if SEM ≤ 0.30 after MIN_ITEMS
- *   - Force stop at MAX_ITEMS (30)
+ * Stop when ANY of these are true (after MIN_ITEMS):
+ *   1. SEM ≤ 0.35 — measurement is precise enough
+ *   2. Theta stable — last 3 changes all < 0.1 (ability known)
+ *   3. Items ≥ MAX_ITEMS (40) — hard cap
+ *   4. No items left
  */
 export function checkStoppingRule(
   itemsAdministered: number,
   sem: number,
   nextItem: Item | null,
+  responses: CATResponse[] = [],
 ): StopReason {
   if (!nextItem)
     return 'no_items'
@@ -221,11 +223,12 @@ export function checkStoppingRule(
     return 'max_items'
   if (itemsAdministered >= CAT_CONFIG.MIN_ITEMS && sem <= CAT_CONFIG.SEM_THRESHOLD)
     return 'sem_threshold'
+  if (itemsAdministered >= CAT_CONFIG.MIN_ITEMS && isThetaStable(responses))
+    return 'theta_stable'
   return null
 }
 
 // ─── Ability Classification ───────────────────────────────────────────────────
-
 export function classifyAbility(theta: number): 'Low' | 'Average' | 'High' {
   if (theta < -1.33) return 'Low'
   if (theta >= 1.33) return 'High'
@@ -233,7 +236,6 @@ export function classifyAbility(theta: number): 'Low' | 'Average' | 'High' {
 }
 
 // ─── Test Information ─────────────────────────────────────────────────────────
-
 export function getTestInformation(theta: number, administeredItems: Item[]): number {
   return administeredItems.reduce(
     (sum, item) => sum + fisherInformation(theta, item.rasch_b_value),
@@ -242,11 +244,6 @@ export function getTestInformation(theta: number, administeredItems: Item[]): nu
 }
 
 // ─── Topic Count Helper ───────────────────────────────────────────────────────
-
-/**
- * Builds a topic count map from responses already given.
- * Passed into selectNextItem() to enforce content balancing.
- */
 export function buildTopicCounts(responses: CATResponse[]): Record<string, number> {
   return responses.reduce((counts, r) => {
     const topic = r.item.topic
