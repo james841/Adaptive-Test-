@@ -1,3 +1,4 @@
+
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { StudentNav } from '@/components/StudentNav'
@@ -50,17 +51,23 @@ export default function LandingPage() {
 
       <main className="flex-1">
         {/* Hero Section */}
-        <section className="relative border-b border-slate-200 bg-white overflow-hidden">
-          {/* Default Slate Structural Grid */}
-          <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#f1f5f9_1px,transparent_1px),linear-gradient(to_bottom,#f1f5f9_1px,transparent_1px)] bg-[size:3.5rem_3.5rem]" />
+        {/* Changed background color from bg-white to bg-slate-50 and added a prominent grid pattern */}
+        <section className="relative border-b border-slate-200 bg-slate-50 overflow-hidden">
           
+          {/* Default Slate Structural Grid - Made more visible and consistent */}
+          <div className="absolute inset-0 -z-10 bg-[linear-gradient(to_right,#e2e8f0_1px,transparent_1px),linear-gradient(to_bottom,#e2e8f0_1px,transparent_1px)] bg-[size:4rem_4rem]" />
+          
+          {/* Subtle accent circles within the grid for visual interest without using purple */}
+          <div className="absolute top-1/4 left-1/4 -z-10 w-96 h-96 rounded-full bg-blue-100/50 blur-[128px]" />
+          <div className="absolute bottom-1/4 right-1/4 -z-10 w-96 h-96 rounded-full bg-slate-200/60 blur-[128px]" />
+
           <div className="max-w-7xl mx-auto px-6 pt-24 pb-28 md:pt-32 md:pb-36">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-16 items-center">
               
               {/* Left Column: Universal Content & Layout */}
-              <div className="lg:col-span-7 space-y-8">
+              <div className="lg:col-span-7 space-y-8 relative">
                 {/* Global Micro Badge using default brand colors */}
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-blue-50 border border-blue-200 text-blue-700 text-xs font-semibold tracking-wide">
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md bg-white border border-blue-200 text-blue-700 text-xs font-semibold tracking-wide shadow-inner">
                   <Globe2 className="w-3.5 h-3.5 text-blue-600" />
                   Universal Psychometric Assessment Engine
                 </div>
@@ -81,21 +88,21 @@ export default function LandingPage() {
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 pt-2">
                   <Link 
                     to={primaryLink} 
-                    className="group flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-lg text-sm font-semibold tracking-wide border border-blue-700 shadow-sm shadow-blue-600/10 transition-all duration-200 hover:bg-blue-700 hover:border-blue-800 active:scale-[0.99]"
+                    className="group flex items-center justify-center gap-2 bg-blue-600 text-white px-7 py-3.5 rounded-lg text-sm font-semibold tracking-wide border-2 border-blue-700 shadow-sm transition-all duration-200 hover:bg-blue-700 hover:border-blue-800 active:scale-[0.99]"
                   >
                     {student ? 'Continue Assessment' : 'Begin Assessment Setup'}
                     <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform duration-200" />
                   </Link>
                   <Link 
                     to="/login" 
-                    className="flex items-center justify-center px-7 py-3.5 rounded-lg text-sm font-semibold text-slate-700 border border-slate-200 bg-white shadow-sm hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 transition-all duration-200 active:scale-[0.99]"
+                    className="flex items-center justify-center px-7 py-3.5 rounded-lg text-sm font-semibold text-slate-700 border-2 border-slate-200 bg-white shadow-sm hover:bg-slate-50 hover:text-slate-900 hover:border-slate-300 transition-all duration-200 active:scale-[0.99]"
                   >
                     Already Registered
                   </Link>
                 </div>
 
                 {/* Performance Analytics Indicators */}
-                <div className="pt-8 grid grid-cols-3 gap-6 border-t border-slate-200 max-w-md">
+                <div className="pt-8 grid grid-cols-3 gap-6 border-t-2 border-slate-200 max-w-md">
                   <div>
                     <p className="text-xl font-bold text-slate-900">Rasch</p>
                     <p className="text-xs text-slate-500">Mathematical Model</p>
@@ -112,7 +119,10 @@ export default function LandingPage() {
               </div>
 
               {/* Right Column: Refined Default Console Module */}
-              <div className="hidden lg:block lg:col-span-5">
+              <div className="hidden lg:block lg:col-span-5 relative">
+                {/* Decorative glow to complement the grid without being purple */}
+                <div className="absolute -inset-4 rounded-3xl bg-blue-100/30 blur-2xl -z-10" />
+
                 <div className="bg-slate-900 border border-slate-800 p-6 rounded-xl shadow-2xl shadow-slate-950/40 max-w-md mx-auto">
                   {/* System Header Window Bar */}
                   <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-800">
@@ -154,7 +164,7 @@ export default function LandingPage() {
         </section>
 
         {/* Process Flow Section */}
-        <section className="bg-slate-50 border-b border-slate-200/60">
+        <section className="bg-white border-b border-slate-200/60">
           <div className="max-w-6xl mx-auto px-6 py-24">
             <div className="mb-16 space-y-2">
               <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest block">Process Architecture</span>
@@ -179,8 +189,8 @@ export default function LandingPage() {
                   body: 'Generates definitive parameters and deep cross-disciplinary diagnostic breakdowns immediately on submission.',
                 },
               ].map((item, i) => (
-                <div key={i} className="bg-white p-8 rounded-xl border border-slate-200/60 shadow-sm transition-all duration-300 hover:shadow-md hover:border-slate-300">
-                  <div className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center mb-6 border border-slate-200/60">
+                <div key={i} className="bg-slate-50 p-8 rounded-xl border border-slate-200 shadow-sm transition-all duration-300 hover:shadow-md hover:border-slate-300">
+                  <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center mb-6 border-2 border-slate-200 shadow-inner">
                     {item.icon}
                   </div>
                   <h3 className="text-base font-bold text-slate-900 mb-2.5">{item.title}</h3>
@@ -193,7 +203,7 @@ export default function LandingPage() {
 
         {/* Universal Cross-Disciplinary Fields Filter Mapping */}
         <section className="max-w-6xl mx-auto px-6 py-24">
-          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6 pb-6 border-b border-slate-200/60">
+          <div className="flex flex-col md:flex-row md:items-end justify-between mb-12 gap-6 pb-6 border-b-2 border-slate-200">
             <div className="space-y-2">
               <span className="text-[11px] font-bold text-blue-600 uppercase tracking-widest block">Assessment Map</span>
               <h2 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Syllabus Scope Covered</h2>
@@ -211,8 +221,8 @@ export default function LandingPage() {
                 onClick={() => setActiveCategory(cat.id)}
                 className={`px-4 py-2 rounded-md text-xs font-semibold border tracking-wide transition-all ${
                   activeCategory === cat.id
-                    ? 'bg-slate-900 border-slate-900 text-white'
-                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
+                    ? 'bg-slate-900 border-slate-900 text-white shadow-sm'
+                    : 'bg-white border-2 border-slate-200 text-slate-600 hover:border-slate-300 hover:text-slate-900'
                 }`}
               >
                 {cat.label}
@@ -223,7 +233,7 @@ export default function LandingPage() {
           {/* Fields Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             {filteredFields.map(field => (
-              <div key={field.name} className="group flex items-center gap-3 border border-slate-200/70 bg-white p-4 rounded-lg transition-all duration-200 hover:border-slate-400">
+              <div key={field.name} className="group flex items-center gap-3 border-2 border-slate-200 bg-white p-4 rounded-lg transition-all duration-200 hover:border-blue-400 hover:bg-blue-50/50 hover:shadow-inner">
                 <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0" />
                 <span className="font-medium text-slate-800 text-sm">{field.name}</span>
               </div>
@@ -233,10 +243,10 @@ export default function LandingPage() {
       </main>
 
       {/* Corporate Technical Footer */}
-      <footer className="bg-slate-900 text-slate-400 py-12 border-t border-slate-950">
+      <footer className="bg-slate-900 text-slate-400 py-12 border-t-2 border-slate-950">
         <div className="max-w-6xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-3">
-            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs">∑</div>
+            <div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white font-bold text-xs shadow">∑</div>
             <span className="font-mono font-bold text-white tracking-widest text-[11px] uppercase">Universal CAT Infrastructure</span>
           </div>
           
