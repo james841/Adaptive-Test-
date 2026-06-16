@@ -4,9 +4,9 @@
  */
 
 import { supabase } from './supabase'
+import { hashPassword, verifyPassword } from './crypto'
 import type { Student, Item, TestSession, Response, CATResponse } from '@/types'
 import { classifyAbility } from './catEngine'
-import bcrypt from 'bcryptjs'   // we use a simple hash for student passwords
 
 // ─── Students ────────────────────────────────────────────────────────────────
 
@@ -19,7 +19,6 @@ export async function registerStudent(data: {
   username: string
   password: string
 }): Promise<{ student?: Student; error?: string }> {
-  // Check username uniqueness
   const { data: existing } = await supabase
     .from('students')
     .select('id')
@@ -28,16 +27,24 @@ export async function registerStudent(data: {
 
   if (existing) return { error: 'Username already taken. Choose another.' }
 
-  const password_hash = await bcrypt.hash(data.password, 10)
+  const password_hash = await hashPassword(data.password, data.username)
 
   const { data: student, error } = await supabase
     .from('students')
-    .insert({ ...data, password_hash })
-    .select()
+    .insert({
+      full_name:     data.full_name,
+      gender:        data.gender,
+      school:        data.school,
+      school_type:   data.school_type,
+      class:         data.class,
+      username:      data.username,
+      password_hash,
+    })
+    .select('id,full_name,gender,school,school_type,class,username,created_at')
     .single()
 
   if (error) return { error: error.message }
-  return { student }
+  return { student: student as Student }
 }
 
 export async function loginStudent(
@@ -52,12 +59,11 @@ export async function loginStudent(
 
   if (error || !row) return { error: 'Invalid username or password.' }
 
-  const valid = await bcrypt.compare(password, row.password_hash)
+  const valid = await verifyPassword(password, username, row.password_hash)
   if (!valid) return { error: 'Invalid username or password.' }
 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { password_hash: _, ...student } = row
-  return { student }
+  const { password_hash: _ph, ...student } = row
+  return { student: student as Student }
 }
 
 export async function getStudentById(id: string): Promise<Student | null> {
@@ -74,7 +80,7 @@ export async function getAllStudents(): Promise<Student[]> {
     .from('students')
     .select('id,full_name,gender,school,school_type,class,username,created_at')
     .order('created_at', { ascending: false })
-  return data ?? []
+  return (data ?? []) as Student[]
 }
 
 // ─── Items ────────────────────────────────────────────────────────────────────
@@ -85,7 +91,7 @@ export async function getActiveItems(): Promise<Item[]> {
     .select('*')
     .eq('item_status', 'Active')
     .order('rasch_b_value', { ascending: true })
-  return data ?? []
+  return (data ?? []) as Item[]
 }
 
 export async function getAllItems(): Promise<Item[]> {
@@ -93,15 +99,36 @@ export async function getAllItems(): Promise<Item[]> {
     .from('items')
     .select('*')
     .order('rasch_b_value', { ascending: true })
-  return data ?? []
+  return (data ?? []) as Item[]
 }
 
 export async function updateItem(
   id: string,
-  updates: Partial<Pick<Item, 'question' | 'option_a' | 'option_b' | 'option_c' | 'option_d' | 'correct_answer' | 'item_status' | 'rasch_b_value' | 'difficulty_level'>>,
+  updates: Partial<Pick<Item,
+    'question' | 'option_a' | 'option_b' | 'option_c' | 'option_d' |
+    'correct_answer' | 'item_status' | 'rasch_b_value' | 'difficulty_level'
+  >>,
 ): Promise<{ error?: string }> {
   const { error } = await supabase.from('items').update(updates).eq('id', id)
   return error ? { error: error.message } : {}
+}
+
+// ─── Item Stats ───────────────────────────────────────────────────────────────
+
+/**
+ * Updates times_administered, times_correct, exposure_rate after every answer.
+ * Uses SECURITY DEFINER RPC so it works even for unauthenticated students.
+ * Requires the update_item_stats() function to exist in Supabase (run the SQL).
+ */
+export async function incrementItemStats(
+  itemId: string,
+  isCorrect: boolean,
+): Promise<void> {
+  const { error } = await supabase.rpc('update_item_stats', {
+    p_item_id:    itemId,
+    p_is_correct: isCorrect,
+  })
+  if (error) console.error('[incrementItemStats] RPC error:', error.message)
 }
 
 // ─── Test Sessions ────────────────────────────────────────────────────────────
@@ -112,7 +139,7 @@ export async function createTestSession(studentId: string): Promise<TestSession 
     .insert({ student_id: studentId, status: 'in_progress' })
     .select()
     .single()
-  return data
+  return data as TestSession | null
 }
 
 export async function completeTestSession(
@@ -123,12 +150,12 @@ export async function completeTestSession(
 ): Promise<void> {
   const abilityLevel = classifyAbility(finalTheta)
   await supabase.from('test_sessions').update({
-    end_time: new Date().toISOString(),
-    final_theta: finalTheta,
-    final_sem: finalSem,
+    end_time:                 new Date().toISOString(),
+    final_theta:              finalTheta,
+    final_sem:                finalSem,
     total_items_administered: totalItems,
-    ability_level: abilityLevel,
-    status: 'completed',
+    ability_level:            abilityLevel,
+    status:                   'completed',
   }).eq('id', sessionId)
 }
 
@@ -141,13 +168,13 @@ export async function getSessionsByStudent(studentId: string): Promise<TestSessi
   return data ?? []
 }
 
-export async function getAllSessions(): Promise<(TestSession & { students: Pick<Student, 'full_name' | 'school'> })[]> {
+export async function getAllSessions() {
   const { data } = await supabase
     .from('test_sessions')
-    .select('*, students(full_name, school)')
+    .select('*, students(full_name, gender, school_type, school)')
     .eq('status', 'completed')
     .order('created_at', { ascending: false })
-  return (data as never) ?? []
+  return data ?? []
 }
 
 // ─── Responses ────────────────────────────────────────────────────────────────
@@ -159,15 +186,15 @@ export async function saveResponse(
   position: number,
 ): Promise<void> {
   const payload: Omit<Response, 'id' | 'created_at'> = {
-    session_id:      sessionId,
-    student_id:      studentId,
-    item_id:         catResponse.item.id,
-    item_position:   position,
-    selected_answer: catResponse.selectedAnswer,
-    is_correct:      catResponse.isCorrect,
-    theta_before:    catResponse.thetaBefore,
-    theta_after:     catResponse.thetaAfter,
-    sem_after:       catResponse.semAfter,
+    session_id:       sessionId,
+    student_id:       studentId,
+    item_id:          catResponse.item.id,
+    item_position:    position,
+    selected_answer:  catResponse.selectedAnswer,
+    is_correct:       catResponse.isCorrect,
+    theta_before:     catResponse.thetaBefore,
+    theta_after:      catResponse.thetaAfter,
+    sem_after:        catResponse.semAfter,
     response_time_ms: catResponse.responseTimeMs,
   }
   await supabase.from('responses').insert(payload)
@@ -203,18 +230,19 @@ export async function getEfficiencyStats() {
 
   if (!sessions || sessions.length === 0) return null
 
-  const avgItems = sessions.reduce((s, r) => s + (r.total_items_administered ?? 0), 0) / sessions.length
-  const avgSem   = sessions.reduce((s, r) => s + (r.final_sem ?? 0), 0) / sessions.length
+  const total    = sessions.length
+  const avgItems = sessions.reduce((s, r) => s + (r.total_items_administered ?? 0), 0) / total
+  const avgSem   = sessions.reduce((s, r) => s + (r.final_sem ?? 0), 0) / total
+  const avgTheta = sessions.reduce((s, r) => s + (r.final_theta ?? 0), 0) / total
   const avgTif   = sessions.reduce((s, r) => {
     const sem = r.final_sem ?? 0
     return s + (sem > 0 ? 1 / (sem * sem) : 0)
-  }, 0) / sessions.length
-  const avgTheta = sessions.reduce((s, r) => s + (r.final_theta ?? 0), 0) / sessions.length
+  }, 0) / total
 
   const avgTimeMs = sessions.reduce((s, r) => {
     if (!r.start_time || !r.end_time) return s
     return s + (new Date(r.end_time).getTime() - new Date(r.start_time).getTime())
-  }, 0) / sessions.length
+  }, 0) / total
 
   const distribution = {
     Low:     sessions.filter(s => s.ability_level === 'Low').length,
@@ -222,49 +250,5 @@ export async function getEfficiencyStats() {
     High:    sessions.filter(s => s.ability_level === 'High').length,
   }
 
-  return { avgItems, avgSem, avgTif, avgTheta, avgTimeMs, total: sessions.length, distribution }
-}
-
-// ─── Item Stats (times_administered, times_correct, exposure_rate) ────────────
-
-/**
- * Called after every item is answered.
- * Updates times_administered, times_correct, and exposure_rate directly.
- * Uses a raw update instead of RPC to avoid the hanging RPC issue.
- */
-export async function incrementItemStats(
-  itemId: string,
-  isCorrect: boolean,
-): Promise<void> {
-  // Step 1: fetch current values
-  const { data: item } = await supabase
-    .from('items')
-    .select('times_administered, times_correct')
-    .eq('id', itemId)
-    .single()
-
-  if (!item) return
-
-  const newAdministered = (item.times_administered ?? 0) + 1
-  const newCorrect      = (item.times_correct ?? 0) + (isCorrect ? 1 : 0)
-
-  // Step 2: fetch total completed sessions for exposure rate
-  const { count: totalSessions } = await supabase
-    .from('test_sessions')
-    .select('id', { count: 'exact', head: true })
-    .eq('status', 'completed')
-
-  const exposureRate = totalSessions && totalSessions > 0
-    ? parseFloat((newAdministered / totalSessions).toFixed(4))
-    : 0
-
-  // Step 3: update all three columns atomically
-  await supabase
-    .from('items')
-    .update({
-      times_administered: newAdministered,
-      times_correct:      newCorrect,
-      exposure_rate:      exposureRate,
-    })
-    .eq('id', itemId)
+  return { avgItems, avgSem, avgTif, avgTheta, avgTimeMs, total, distribution }
 }
