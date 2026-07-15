@@ -83,6 +83,19 @@ export async function getAllStudents(): Promise<Student[]> {
   return (data ?? []) as Student[]
 }
 
+export async function deleteStudent(id: string): Promise<{ error?: string }> {
+  const { error } = await supabase.from('students').delete().eq('id', id)
+  return error ? { error: error.message } : {}
+}
+
+export async function deleteAllStudents(): Promise<{ error?: string }> {
+  const { error } = await supabase
+    .from('students')
+    .delete()
+    .gt('created_at', '1900-01-01T00:00:00Z')
+  return error ? { error: error.message } : {}
+}
+
 // ─── Items ────────────────────────────────────────────────────────────────────
 
 export async function getActiveItems(): Promise<Item[]> {

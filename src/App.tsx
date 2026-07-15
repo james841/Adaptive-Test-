@@ -18,12 +18,14 @@ import AdminItemsPage     from '@/pages/admin/AdminItemsPage'
 import AdminStudentsPage  from '@/pages/admin/AdminStudentsPage'
 import AdminResultsPage   from '@/pages/admin/AdminResultsPage'
 import AdminEfficiencyPage from '@/pages/admin/AdminEfficiencyPage'
+import { AdminDataProvider } from './context/Admindatacontext'
 
 export default function App() {
   return (
     <BrowserRouter>
       <StudentAuthProvider>
         <AdminAuthProvider>
+          <AdminDataProvider>
           <Routes>
             {/* ── Public student routes ── */}
             <Route path="/"            element={<LandingPage />} />
@@ -59,6 +61,7 @@ export default function App() {
               <AdminRoute><AdminEfficiencyPage /></AdminRoute>
             } />
           </Routes>
+          </AdminDataProvider>
         </AdminAuthProvider>
       </StudentAuthProvider>
     </BrowserRouter>
