@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { AdminSidebar } from '@/components/AdminSidebar'
-import { SectionHeader, EmptyState, AbilityBadge } from '@/components/ui'
+import { EmptyState, AbilityBadge } from '@/components/ui'
 import { getAllSessions } from '@/lib/api'
-import { BarChart3, Filter, FileSpreadsheet, FileText } from 'lucide-react'
+import { BarChart3, Filter, FileSpreadsheet, FileText, Download } from 'lucide-react'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -21,27 +21,29 @@ function fmtTheta(val: any): string {
   const n = Number(val)
   return `${n >= 0 ? '+' : ''}${n.toFixed(2)}`
 }
+
 function fmtTif(sem: any): string {
   if (sem == null) return '—'
   const n = Number(sem)
   if (n <= 0) return '—'
   return (1 / (n * n)).toFixed(2)
 }
+
 // ─── PDF Export ───────────────────────────────────────────────────────────────
 
 function exportPDF(data: any[], filter: string) {
   const rows = data.map((s, i) => `
     <tr>
       <td>${i + 1}</td>
-      <td>${s.students?.full_name ?? '—'}</td>
+      <td style="font-weight: 500;">${s.students?.full_name ?? '—'}</td>
       <td>${s.students?.gender ?? '—'}</td>
       <td>${s.students?.school_type ?? '—'}</td>
       <td>${s.students?.school ?? '—'}</td>
-      <td>${fmtTheta(s.final_theta)}</td>
-      <td>${s.final_sem != null ? Number(s.final_sem).toFixed(3) : '—'}</td>
-      <td>${fmtTif(s.final_sem)}</td>
-      <td>${s.total_items_administered}</td>
-      <td>${fmtDuration(s.start_time, s.end_time)}</td>
+      <td style="font-family: monospace;">${fmtTheta(s.final_theta)}</td>
+      <td style="font-family: monospace;">${s.final_sem != null ? Number(s.final_sem).toFixed(3) : '—'}</td>
+      <td style="font-family: monospace;">${fmtTif(s.final_sem)}</td>
+      <td style="text-align: center;">${s.total_items_administered}</td>
+      <td style="font-family: monospace;">${fmtDuration(s.start_time, s.end_time)}</td>
       <td>${s.ability_level ?? '—'}</td>
       <td>${new Date(s.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
     </tr>
@@ -55,34 +57,31 @@ function exportPDF(data: any[], filter: string) {
       <title>CAT Results — ${filter}</title>
       <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: 'Segoe UI', sans-serif; font-size: 11px; color: #111; padding: 32px; }
-        .header { margin-bottom: 24px; }
-        h1  { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-        p.meta { font-size: 10px; color: #64748b; }
-        table { width: 100%; border-collapse: collapse; }
-        th { background: #1e293b; color: #fff; text-align: left;
-             padding: 9px 12px; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; }
-        td { padding: 8px 12px; border-bottom: 1px solid #e2e8f0; font-size: 11px; }
-        tr:nth-child(even) td { background: #f8fafc; }
-        .low     { color: #dc2626; font-weight: 600; }
-        .average { color: #d97706; font-weight: 600; }
-        .high    { color: #16a34a; font-weight: 600; }
-        @media print { body { padding: 16px; } }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; font-size: 11px; color: #334155; padding: 40px; background: #fff; }
+        .header { margin-bottom: 32px; border-bottom: 1px solid #e2e8f0; padding-bottom: 16px; }
+        h1  { font-size: 22px; font-weight: 700; color: #0f172a; margin-bottom: 6px; letter-spacing: -0.02em; }
+        p.meta { font-size: 12px; color: #64748b; }
+        table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        th { background: #f8fafc; color: #475569; text-align: left; font-weight: 600;
+             padding: 12px 14px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-size: 11px; color: #334155; }
+        tr:nth-child(even) td { background: #f8fafc/50; }
+        @media print { body { padding: 20px; } .header { margin-bottom: 24px; } }
       </style>
     </head>
     <body>
       <div class="header">
-        <h1>CAT System — Test Results</h1>
+        <h1>Adaptive Testing System — Results Report</h1>
         <p class="meta">
-          Filter: ${filter} &nbsp;|&nbsp; Total: ${data.length} records &nbsp;|&nbsp;
-          Generated: ${new Date().toLocaleString()}
+          <strong>Filter Status:</strong> ${filter} &nbsp;·&nbsp; <strong>Total Records:</strong> ${data.length} &nbsp;·&nbsp;
+          <strong>Generated:</strong> ${new Date().toLocaleString()}
         </p>
       </div>
       <table>
         <thead>
           <tr>
             <th>#</th><th>Student Name</th><th>Gender</th><th>School Type</th><th>School</th>
-            <th>Final θ</th><th>SEM</th><th>TIF</th><th>Items</th>
+            <th>Final θ</th><th>SEM</th><th>TIF</th><th style="text-align: center;">Items</th>
             <th>Time Taken</th><th>Ability Level</th><th>Date</th>
           </tr>
         </thead>
@@ -163,133 +162,132 @@ export default function AdminResultsPage() {
     : sessions.filter(s => s.ability_level === filter)
 
   return (
-    <div className="flex min-h-screen bg-slate-50/50">
+    <div className="flex min-h-screen bg-slate-50 text-slate-900 antialiased">
       <AdminSidebar />
-      <main className="flex-1 p-6 lg:p-10 max-w-7xl mx-auto w-full overflow-y-auto">
+      <main className="flex-1 p-6 lg:p-8 max-w-7xl mx-auto w-full overflow-y-auto">
 
-        {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="p-3 bg-purple-100 rounded-lg">
-                <BarChart3 className="w-5 h-5 text-purple-600" />
-              </div>
-              <h1 className="text-3xl font-bold text-slate-900">Test Results</h1>
+        {/* Dashboard Header Container */}
+        <div className="bg-white border border-slate-200 rounded-xl p-6 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-6">
+          <div className="flex items-start gap-4">
+            <div className="p-3 bg-slate-100 rounded-xl border border-slate-200 shrink-0">
+              <BarChart3 className="w-6 h-6 text-slate-700" />
             </div>
-            <p className="text-slate-600">All completed test sessions and student outcomes</p>
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Test Results</h1>
+              <p className="text-sm text-slate-500 mt-0.5">Review metric evaluation datasets across all completed adaptive sessions</p>
+            </div>
           </div>
-          <div className="text-right">
-            <p className="text-3xl font-bold text-slate-900">{sessions.length}</p>
-            <p className="text-xs text-slate-500 uppercase tracking-wider">Total Tests</p>
+          
+          <div className="sm:text-right bg-slate-50 px-5 py-3 rounded-xl border border-slate-100 min-w-[140px]">
+            <p className="text-3xl font-bold font-mono tracking-tight text-slate-900">{sessions.length}</p>
+            <p className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider mt-0.5">Total Records</p>
           </div>
         </div>
 
-        {/* Filter + Export row */}
-        <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
-          {/* Filter buttons */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <div className="flex items-center gap-2 text-slate-600">
+        {/* Filters and Utilities Control Panel */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6">
+          
+          {/* Segmented Filter Control */}
+          <div className="flex items-center gap-3 bg-white border border-slate-200 p-1.5 rounded-xl w-fit">
+            <div className="flex items-center gap-1.5 px-2 text-slate-400">
               <Filter className="w-4 h-4" />
-              <span className="text-sm font-medium">Filter by Ability:</span>
+              <span className="text-xs font-semibold uppercase tracking-wider hidden sm:inline">Ability:</span>
             </div>
-            {(['All','Low','Average','High'] as const).map(f => (
-              <button
-                key={f}
-                onClick={() => setFilter(f)}
-                className={`px-4 py-2 text-sm font-medium rounded-lg transition-all ${
-                  filter === f
-                    ? 'bg-blue-600 text-white shadow-lg shadow-blue-600/30'
-                    : 'bg-white border border-slate-200 text-slate-700 hover:border-slate-300 hover:bg-slate-50'
-                }`}
-              >
-                {f}
-              </button>
-            ))}
+            <div className="flex items-center gap-1">
+              {(['All', 'Low', 'Average', 'High'] as const).map(f => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={`px-3.5 py-1.5 text-sm font-medium rounded-lg transition-all ${
+                    filter === f
+                      ? 'bg-slate-900 text-white'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  {f}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Export buttons */}
+          {/* Export Action Triggers */}
           <div className="flex items-center gap-2">
             <button
               onClick={() => exportExcel(filtered, filter)}
               disabled={loading || filtered.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
-                         bg-white border border-slate-200 text-slate-700
-                         hover:border-green-400 hover:text-green-700 hover:bg-green-50
-                         disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl
+                         bg-white border border-slate-200 text-slate-700 hover:bg-slate-50
+                         disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <FileSpreadsheet className="w-4 h-4" />
-              Export Excel
+              <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+              <span>Export CSV</span>
             </button>
+            
             <button
               onClick={() => exportPDF(filtered, filter)}
               disabled={loading || filtered.length === 0}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg
-                         bg-slate-900 text-white
-                         hover:bg-slate-700
-                         disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              className="flex items-center gap-2 px-4 py-2.5 text-sm font-medium rounded-xl
+                         bg-slate-900 text-white hover:bg-slate-800
+                         disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
             >
-              <FileText className="w-4 h-4" />
-              Export PDF
+              <FileText className="w-4 h-4 text-slate-300" />
+              <span>Print Report</span>
             </button>
           </div>
         </div>
 
-        {/* Table */}
+        {/* Master Table Frame */}
         <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           {loading ? (
-            <div className="p-8 space-y-4">
+            <div className="p-6 space-y-3">
               {[1, 2, 3, 4, 5].map(i => (
-                <div key={i} className="h-12 bg-slate-50 animate-pulse rounded-lg" />
+                <div key={i} className="h-11 bg-slate-100/70 animate-pulse rounded-lg" />
               ))}
             </div>
           ) : filtered.length === 0 ? (
             <EmptyState message={filter !== 'All' ? `No ${filter} ability results found.` : 'No test results found.'} />
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full text-left">
+              <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/50 border-b border-slate-200 text-[11px] uppercase tracking-widest text-slate-500 font-semibold">
-                    <th className="px-6 py-4">#</th>
-                    <th className="px-6 py-4">Student Name</th>
-                    <th className="px-6 py-4">Gender</th>
-                    <th className="px-6 py-4">School Type</th>
-                    <th className="px-6 py-4">School</th>
-                    <th className="px-6 py-4">Final θ</th>
-                    <th className="px-6 py-4">SEM</th>
-                    <th className="px-6 py-4">TIF</th>
-                    <th className="px-6 py-4">Items Used</th>
-                    <th className="px-6 py-4">Time Taken</th>
-                    <th className="px-6 py-4">Ability Level</th>
-                    <th className="px-6 py-4">Date</th>
+                  <tr className="bg-slate-50/70 border-b border-slate-200 text-[10px] uppercase tracking-wider text-slate-500 font-semibold">
+                    <th className="px-5 py-3.5 font-medium w-12 text-center">#</th>
+                    <th className="px-5 py-3.5 font-medium">Student Name</th>
+                    <th className="px-5 py-3.5 font-medium">Gender</th>
+                    <th className="px-5 py-3.5 font-medium">School Type</th>
+                    <th className="px-5 py-3.5 font-medium">School</th>
+                    <th className="px-5 py-3.5 font-medium">Final θ</th>
+                    <th className="px-5 py-3.5 font-medium">SEM</th>
+                    <th className="px-5 py-3.5 font-medium">TIF</th>
+                    <th className="px-5 py-3.5 font-medium text-center">Items</th>
+                    <th className="px-5 py-3.5 font-medium">Duration</th>
+                    <th className="px-5 py-3.5 font-medium">Ability Level</th>
+                    <th className="px-5 py-3.5 font-medium">Date Completed</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-200">
+                <tbody className="divide-y divide-slate-100 text-sm">
                   {filtered.map((s, i) => (
-                    <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="px-6 py-4 font-mono text-xs text-slate-500">{i + 1}</td>
-                      <td className="px-6 py-4 font-medium text-slate-900">{s.students?.full_name ?? '—'}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{s.students?.gender ?? '—'}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{s.students?.school_type ?? '—'}</td>
-                      <td className="px-6 py-4 text-sm text-slate-600">{s.students?.school ?? '—'}</td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-700">
-                        {fmtTheta(s.final_theta)}
-                      </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-700">
+                    <tr key={s.id} className="hover:bg-slate-50/40 transition-colors">
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-400 text-center">{i + 1}</td>
+                      <td className="px-5 py-3.5 font-medium text-slate-900 whitespace-nowrap">{s.students?.full_name ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{s.students?.gender ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-slate-500 whitespace-nowrap">{s.students?.school_type ?? '—'}</td>
+                      <td className="px-5 py-3.5 text-slate-500 max-w-xs truncate">{s.students?.school ?? '—'}</td>
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">{fmtTheta(s.final_theta)}</td>
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">
                         {s.final_sem != null ? Number(s.final_sem).toFixed(3) : '—'}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-700">
-                        {fmtTif(s.final_sem)}
-                      </td>
-                      <td className="px-6 py-4 text-center font-semibold text-slate-900">
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-600 whitespace-nowrap">{fmtTif(s.final_sem)}</td>
+                      <td className="px-5 py-3.5 text-center font-medium text-slate-800 whitespace-nowrap">
                         {s.total_items_administered}
                       </td>
-                      <td className="px-6 py-4 font-mono text-xs text-slate-600">
+                      <td className="px-5 py-3.5 font-mono text-xs text-slate-500 whitespace-nowrap">
                         {fmtDuration(s.start_time, s.end_time)}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-3.5 whitespace-nowrap">
                         <AbilityBadge level={s.ability_level} />
                       </td>
-                      <td className="px-6 py-4 text-xs text-slate-500">
+                      <td className="px-5 py-3.5 text-xs text-slate-400 whitespace-nowrap">
                         {new Date(s.created_at).toLocaleDateString('en-US', {
                           month: 'short', day: 'numeric', year: 'numeric',
                         })}
